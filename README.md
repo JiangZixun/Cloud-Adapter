@@ -260,6 +260,5 @@ If you use our code or models in your research, please cite with:
 
 ## Acknowledgments
 
-[![Readme Card](https://github-readme-stats.vercel.app/api/pin/?username=open-mmlab&repo=mmsegmentation)](https://github.com/open-mmlab/mmsegmentation)
-
-[![Readme Card](https://github-readme-stats.vercel.app/api/pin/?username=w1oves&repo=Rein)](https://github.com/w1oves/Rein)
+- [https://github.com/open-mmlab/mmsegmentation](https://github.com/open-mmlab/mmsegmentation)
+- [https://github.com/w1oves/Rein](https://github.com/w1oves/Rein)
