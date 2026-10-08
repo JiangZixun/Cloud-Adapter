@@ -1,0 +1,59 @@
+{
+  "dataset": "HRC_WHU",
+  "model": "LSMamba",
+  "data_root": "/mnt/data1/Dataset/Cloud-Adapter/hrc_whu",
+  "work_dir": "experiments/HRC_WHU/LSMamba",
+  "classes": [
+    "clear sky",
+    "cloud"
+  ],
+  "image_size": [
+    256,
+    256
+  ],
+  "mean": [
+    123.675,
+    116.28,
+    103.53
+  ],
+  "std": [
+    58.395,
+    57.12,
+    57.375
+  ],
+  "base_channels": 64,
+  "batch_size": 4,
+  "num_workers": 4,
+  "max_iters": 40000,
+  "val_interval": 4000,
+  "log_interval": 50,
+  "lr": 0.0001,
+  "weight_decay": 0.05,
+  "poly_power": 0.9,
+  "seed": 42,
+  "device": "cuda",
+  "amp": false,
+  "keep_top_k": 3,
+  "selection_metric": "mIoU",
+  "ignore_index": 255,
+  "loss": {
+    "ce_weight": 5.0,
+    "dice_weight": 5.0,
+    "dice_eps": 1e-05
+  },
+  "lsmamba": {
+    "depths": [
+      2,
+      2,
+      2,
+      2
+    ],
+    "depths_decoder": [
+      2,
+      2,
+      2,
+      2
+    ],
+    "drop_path_rate": 0.2
+  }
+}

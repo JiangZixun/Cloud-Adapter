@@ -1,0 +1,12 @@
+{
+  "model_source": "/mnt/data1/Qwen3/remote_cafbr_overlay/scripts/cloud_seg/models/hzy_fmamba/fmamba.py",
+  "model_source_sha256": "26a1b1927e5a143f1f7f29b444cc67fd29dec209a319f1e9db75705353118ffd",
+  "scan_source": "/mnt/data1/Qwen3/scripts/cloud_seg/ops/selective_scan_interface.py",
+  "scan_source_sha256": "ecc7ad5b8817728bf32d4abe0b9094c078cfba89c93946a22d225d91f350eded",
+  "source_config": "/mnt/data1/Qwen3/remote_cafbr_download/local_resolved_config.json",
+  "adaptations": [
+    "package-relative scan import",
+    "lazy visualization import",
+    "optional decoder pyramid outputs; native forward unchanged"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "architecture": "Local_VMUNet2 / LS-Mamba",
+  "files": [
+    {
+      "source": "/mnt/data1/Qwen3/external/ls_mamba_paper1/model/localvmunet2/localvmunet2.py",
+      "destination": "baselines/lsmamba/localvmunet2.py",
+      "sha256": "6cd3c5cd999fef1028e8b54ecb6b1fdac8ae3d8bc883b34f3f748f3ac75250dc"
+    },
+    {
+      "source": "/mnt/data1/Qwen3/external/ls_mamba_paper1/model/localvmunet2/lvmamba2.py",
+      "destination": "baselines/lsmamba/lvmamba2.py",
+      "sha256": "33b918c21ba6e55b1bef5a5cba917d88129d441201cf9745c099461c7d372003"
+    },
+    {
+      "source": "/mnt/data1/Qwen3/external/ls_mamba_paper1/model/localvmunet2/mamba2/multi_mamba.py",
+      "destination": "baselines/lsmamba/mamba2/multi_mamba.py",
+      "sha256": "087dea7a3d9fb1c7b3fbbd7e97ab6a4aa45e926829a28efb598649194f3997a3"
+    },
+    {
+      "source": "/mnt/data1/Qwen3/external/ls_mamba_paper1/model/localvmunet2/mamba2/local_scan.py",
+      "destination": "baselines/lsmamba/mamba2/local_scan.py",
+      "sha256": "0a186f39d5f2fc835854712e7b99d6f204f31e98463f3cee75088a942e8f88ff"
+    },
+    {
+      "source": "/mnt/data1/Qwen3/external/ls_mamba_paper1/model/localvmunet2/mamba2/rope.py",
+      "destination": "baselines/lsmamba/mamba2/rope.py",
+      "sha256": "b317ee9076a460f4e04390180b6e2041bad8d67e10c50219d31a52cc9227d8c8"
+    },
+    {
+      "source": "/mnt/data1/Qwen3/external/ls_mamba_paper1/model/localvmunet2/mamba2/__init__.py",
+      "destination": "baselines/lsmamba/mamba2/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/home/jzx/anaconda3/envs/mamba/lib/python3.10/site-packages/mamba_ssm/modules/mamba_simple.py",
+      "destination": "baselines/lsmamba/mamba_simple.py",
+      "sha256": "a17e4c51b582dc0d4d690a649eba521cd0c1ee3dc8f0473a0967cdc9ec0874e3"
+    }
+  ],
+  "adaptations": [
+    "Relative imports; installed selective_scan_cuda_core; official Mamba unfused causal Conv1d with SiLU gate; decoded feature pyramid for Mask2Former; RGB and two-class output"
+  ]
+}

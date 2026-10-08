@@ -1,4 +1,5 @@
 work_dirs/
+experiments/
 __pycache__/
 **.pyc
 **.pth

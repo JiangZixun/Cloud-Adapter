@@ -113,6 +113,18 @@ Cloud-Adapter
 
 ## Training
 
+For the standalone UNet baseline on local HRC-WHU data, see
+[the UNet training guide](configs/unet/README.md). It includes full metric history,
+top-3/best/last checkpoints, resume, and a GPU smoke test command.
+
+The local CAFBR FMamba port has native-head and official Mask2Former-head versions;
+see [the FMamba training guide](configs/fmamba/README.md). Commands use the absolute
+Python path of the `qwen3` Conda environment.
+
+The local LS-Mamba port also provides native and official Mask2Former heads;
+see [the LS-Mamba training guide](configs/lsmamba/README.md) for HRC-WHU launchers,
+loss settings, provenance and GPU tests.
+
 ### Step 1: Download and Convert Weights
 
 1. Download pretrained weights of vision foundation models
