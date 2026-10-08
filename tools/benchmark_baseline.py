@@ -15,9 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from baselines.checkpoints import CheckpointManager, write_json
 from baselines.data import CloudDataset, IterationBatchSampler
-from baselines.model_factory import build_model, prediction_logits, training_loss
-from baselines.metrics import confusion_matrix
+from baselines.model_factory import build_model, training_loss
+from baselines.lr_schedule import lr_multiplier
 from tools.train_unet import evaluate
+from baselines.optimization import accumulation_steps, accumulated_update
 
 
 def main():
@@ -29,6 +30,8 @@ def main():
     if args.warmup < 1 or args.steps < 1:
         raise ValueError("Warmup and measured steps must be positive")
     config = json.loads(args.config.read_text())
+    config["grad_accum_steps"] = accumulation_steps(config)
+    config["effective_batch_size"] = config["batch_size"] * config["grad_accum_steps"]
     device = torch.device(config["device"])
     if device.type != "cuda":
         raise ValueError("This benchmark requires CUDA")
@@ -37,13 +40,13 @@ def main():
     model = build_model(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"])
     scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lambda step: max(0, 1 - step / config["max_iters"]) ** config["poly_power"]
+        optimizer, lambda step: lr_multiplier(step, config)
     )
     scaler = torch.amp.GradScaler("cuda", enabled=config["amp"])
     train = CloudDataset(config, "train")
     train_loader = DataLoader(
         train, batch_sampler=IterationBatchSampler(len(train), config["batch_size"], 0,
-                                                  args.warmup + args.steps, config["seed"]),
+                                                  (args.warmup + args.steps) * config["grad_accum_steps"], config["seed"]),
         num_workers=config["num_workers"], pin_memory=True,
     )
     iterator = iter(train_loader)
@@ -51,36 +54,15 @@ def main():
     for step in range(args.warmup + args.steps):
         torch.cuda.synchronize()
         started = time.perf_counter()
-        images, labels = next(iterator)
         model.train()
-        images, labels = images.to(device), labels.to(device)
-        optimizer.zero_grad(set_to_none=True)
-        with torch.autocast("cuda", enabled=config["amp"]):
-            prediction = model(images)
-            loss = training_loss(model, prediction, labels, config)
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        accumulated_update(model, iterator, optimizer, scaler, device, config, training_loss)
         scheduler.step()
-        with torch.no_grad():
-            logits = prediction_logits(prediction, labels.shape[-2:])
-            confusion_matrix(logits.argmax(1), labels, len(config["classes"]), config["ignore_index"])
-        loss.item()
         torch.cuda.synchronize()
         elapsed = time.perf_counter() - started
         if step >= args.warmup:
             timings.append(elapsed)
         if (step + 1) % 10 == 0:
             print(f"Measured {step + 1}/{args.warmup + args.steps} steps", flush=True)
-    train_evaluation = CloudDataset(config, "train")
-    train_evaluation.split = "evaluation"
-    train_evaluation_loader = DataLoader(train_evaluation, batch_size=config["batch_size"],
-                                        num_workers=config["num_workers"], pin_memory=True)
-    torch.cuda.synchronize()
-    started = time.perf_counter()
-    train_metrics = evaluate(model, train_evaluation_loader, device, config, description="Full train split evaluation")
-    torch.cuda.synchronize()
-    train_eval_seconds = time.perf_counter() - started
     validation = DataLoader(CloudDataset(config, "test"), batch_size=config["batch_size"],
                             num_workers=config["num_workers"], pin_memory=True)
     torch.cuda.synchronize()
@@ -88,7 +70,8 @@ def main():
     metrics = evaluate(model, validation, device, config)
     torch.cuda.synchronize()
     val_seconds = time.perf_counter() - started
-    output = ROOT / "experiments" / config["dataset"] / (config["model"] + "_benchmark")
+    suffix = "_benchmark" + (f"_accum{config['grad_accum_steps']}" if config["grad_accum_steps"] > 1 else "")
+    output = ROOT / "experiments" / config["dataset"] / (config["model"] + suffix)
     output.mkdir(parents=True, exist_ok=True)
     state = dict(iteration=1, config=config, model=model.state_dict(), metrics=metrics,
                  optimizer=optimizer.state_dict(), scheduler=scheduler.state_dict(), scaler=scaler.state_dict())
@@ -121,7 +104,7 @@ def main():
         checkpoint_bytes = (Path(temporary) / "last.pth").stat().st_size
     validations = (config["max_iters"] + config["val_interval"] - 1) // config["val_interval"]
     train_seconds = statistics.mean(timings) * config["max_iters"]
-    validation_seconds = (train_eval_seconds + val_seconds) * validations + val_seconds
+    validation_seconds = val_seconds * (validations + 1)
     # Lower bound: first best, two more ranked, remaining last-only. Upper bound:
     # every validation establishes a new best (last + ranked + best copy).
     minimum_io = best_save_seconds + min(2, validations - 1) * ranked_save_seconds + max(0, validations - 3) * last_save_seconds
@@ -133,7 +116,6 @@ def main():
         measured_steps=args.steps, mean_train_step_seconds=statistics.mean(timings),
         median_train_step_seconds=statistics.median(timings), min_train_step_seconds=min(timings),
         max_train_step_seconds=max(timings), full_validation_seconds=val_seconds,
-        full_train_evaluation_seconds=train_eval_seconds, train_evaluation_samples=train_metrics["samples"],
         validation_samples=metrics["samples"], scheduled_validations=validations,
         checkpoint_bytes=checkpoint_bytes, new_best_save_seconds=best_save_seconds,
         ranked_save_seconds=ranked_save_seconds, last_only_save_seconds=last_save_seconds,

@@ -1,4 +1,4 @@
-"""HRC-WHU CAFBR FMamba training; select a head via its JSON configuration."""
+"""CAFBR FMamba training; select a dataset/head via its JSON configuration."""
 
 from pathlib import Path
 

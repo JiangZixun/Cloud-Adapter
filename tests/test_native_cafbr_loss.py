@@ -24,6 +24,20 @@ class NativeLossTests(unittest.TestCase):
         self.assertEqual(logits.grad[0, :, 1, 1].abs().sum().item(), 0)
         self.assertGreater(logits.grad.abs().sum().item(), 0)
 
+    def test_unet_ce_dice_matches_fmamba_loss_and_gradients(self):
+        labels = torch.tensor([[[0, 1], [1, 255]]])
+        fmamba_logits = torch.tensor([[[[1., -2.], [0.5, 4.]],
+                                      [[-1., 2.], [1.5, -4.]]]], requires_grad=True)
+        unet_logits = fmamba_logits.detach().clone().requires_grad_()
+        unet_config = dict(self.config, model="UNet")
+        fmamba_loss = training_loss(nn.Identity(), fmamba_logits, labels, self.config)
+        unet_loss = training_loss(nn.Identity(), unet_logits, labels, unet_config)
+        torch.testing.assert_close(unet_loss, fmamba_loss)
+        fmamba_loss.backward()
+        unet_loss.backward()
+        torch.testing.assert_close(unet_logits.grad, fmamba_logits.grad)
+        self.assertEqual(unet_logits.grad[0, :, 1, 1].abs().sum().item(), 0)
+
     def test_all_ignored_pixels_and_unchanged_unet_loss(self):
         logits = torch.randn(1, 2, 2, 2, requires_grad=True)
         ignored = torch.full((1, 2, 2), 255, dtype=torch.long)

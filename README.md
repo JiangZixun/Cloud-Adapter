@@ -120,6 +120,8 @@ top-3/best/last checkpoints, resume, and a GPU smoke test command.
 The local CAFBR FMamba port has native-head and official Mask2Former-head versions;
 see [the FMamba training guide](configs/fmamba/README.md). Commands use the absolute
 Python path of the `qwen3` Conda environment.
+The [CloudSEN12 guide](configs/fmamba/cloudsen12_README.md) adds L1C/L2A native
+and Mask2Former runs, loss-only training, test-based selection and time estimates.
 
 The local LS-Mamba port also provides native and official Mask2Former heads;
 see [the LS-Mamba training guide](configs/lsmamba/README.md) for HRC-WHU launchers,

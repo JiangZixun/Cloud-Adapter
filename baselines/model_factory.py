@@ -30,7 +30,7 @@ def prediction_logits(output, size):
 def training_loss(model, output, labels, config):
     if isinstance(output, dict):
         return model.training_loss(output, labels, config["ignore_index"])
-    if config["model"] == "FMamba_CAFBR":
+    if config["model"] == "FMamba_CAFBR" or (config["model"] == "UNet" and "loss" in config):
         from .losses import native_cafbr_loss
         return native_cafbr_loss(output, labels, config)
     if config["model"] == "LSMamba":

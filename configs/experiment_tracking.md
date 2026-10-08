@@ -1,8 +1,8 @@
 # Progress, metrics and W&B
 
-All three launchers under `scripts/train/HRC_WHU/` use the shared trainer with
+All launchers under `scripts/train/<Dataset>/` use the shared trainer with
 tqdm overall iteration progress (including resume), current loss/LR and ETA.
-Separate progress bars show train-split evaluation, validation and final testing.
+Separate progress bars show validation and final testing; full-train evaluation is removed.
 Training loss formulas and checkpoint selection are unchanged.
 
 ## Cloud logging
@@ -24,7 +24,7 @@ is reused when resuming. `results.json` contains the cloud run URL.
 No API key is stored in experiment JSON or supplied by the launchers.
 
 Cloud series include `optimization/loss`, `train/loss`, `validation/loss`,
-`test/loss`, all seven aggregate metrics and per-class metrics. The horizontal
+`test/loss`; aggregate and per-class metrics are recorded only for validation/test. The horizontal
 axis is `iteration`; the final test point uses the best checkpoint's iteration.
 Local curves and a metrics-only JSON artifact are uploaded at completion.
 Only model/dataset names and numerical hyperparameters enter the W&B config;
@@ -36,11 +36,11 @@ The standalone `tools/test_fmamba.py` also accepts `--wandb`.
 
 ## Local traceability and visualization
 
-Under `experiments/HRC_WHU/<Model>/`:
+Under `experiments/<Dataset>/<Model>/`:
 
 ```text
 results.json         # one JSON document containing all splits and trace metadata
-curves/loss.png      # optimization, train evaluation, validation and final test loss
+curves/loss.png      # optimization, validation and final test loss
 curves/metrics.png   # seven aggregate metric curves, including final test markers
 ```
 
@@ -48,9 +48,8 @@ curves/metrics.png   # seven aggregate metric curves, including final test marke
 
 * `training`: augmented optimization-batch windows, recorded every `log_interval`
   steps and at each validation. Contains objective loss, LR, batch range and
-  aggregate/per-class metrics for those batches; weights evolve within a window.
-* `train`: at each validation interval, evaluate every training sample in eval
-  mode with augmentation disabled (in smoke runs, the configured 8-sample subset).
+  CAFBR state when applicable; no training segmentation metrics are computed.
+* `train`: empty for new runs. Existing historical train evaluations are retained.
 * `validation`: evaluate the complete 30-image original test split each interval,
   following the requested HRC-WHU protocol.
 * `test`: evaluate the best checkpoint at completion; standalone tests append
@@ -70,6 +69,21 @@ survive resume. Previous histories from before this feature are not reconstructe
 recording starts when using the new trainer. The original CSV/JSONL records and
 per-validation JSON files are retained.
 
-Train and validation loss curves use the same configured objective, evaluated in
-different modes/data. HRC-WHU validation and final testing use the same original
+Training loss is recorded from optimization batches; validation loss uses eval mode. HRC-WHU validation and final testing use the same original
 test images as requested; both roles are explicitly identified in the JSON.
+CloudSEN12 L1C/L2A use test-based checkpoint selection and final best testing.
+Their `train_loss_only: true` setting skips training segmentation metrics and
+full-train evaluation; window-averaged training loss remains in `training` JSON
+history, local curves and W&B `train/loss` / `optimization/loss`. The `train`
+evaluation array remains empty. Periodic test metrics use the `validation` array
+with `data_split: test`, distinguishing checkpoint selection from the final test.
+
+CloudSEN12 defaults to `grad_accum_steps: 4` with physical batch 1. The
+`iteration` axis and tqdm count optimizer updates (40,000), not physical batches
+(160,000). LR, validation and CAFBR switching follow this same update count.
+Training windows include `optimizer_updates`, `batches` (physical batches),
+`samples`, `micro_batches_completed`, `grad_accum_steps` and `effective_batch_size`;
+these are available in local JSON and W&B. Loss remains the mean original
+objective, even though backward divides each micro-batch loss by four.
+`--grad-accum-steps` overrides the configured factor; configurations without the
+key retain factor 1. Changing the accumulation factor requires a new run.

@@ -1,4 +1,4 @@
-"""Evaluate a CAFBR FMamba or LS-Mamba checkpoint on all HRC-WHU test images."""
+"""Evaluate a CAFBR FMamba or LS-Mamba checkpoint on its configured test split."""
 
 import argparse
 import json
@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from baselines.checkpoints import write_json
-from baselines.data import CloudDataset
+from baselines.data import CloudDataset, dataset_splits
 from baselines.model_factory import build_model
 from baselines.cafbr_schedule import restore_cafbr_state
 from tools.train_unet import evaluate
@@ -36,19 +36,22 @@ def main():
     model.load_state_dict(checkpoint["model"])
     cafbr_state = restore_cafbr_state(model, checkpoint)
     del checkpoint["model"]
-    loader = DataLoader(CloudDataset(config, "test"), batch_size=config["batch_size"],
+    test_split = dataset_splits(config)["test"]
+    dataset = CloudDataset(config, test_split, config.get("test_limit"))
+    dataset.split = "evaluation"
+    loader = DataLoader(dataset, batch_size=config["batch_size"],
                         num_workers=args.num_workers, pin_memory=True)
     metrics = evaluate(model, loader, torch.device(args.device), config, description="Test")
     output = args.output or args.checkpoint.parent.parent / "test_metrics.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     result = dict(model=config["model"], checkpoint=str(args.checkpoint.resolve()),
-                  iteration=checkpoint["iteration"], split="test", executable=sys.executable,
+                  iteration=checkpoint["iteration"], split=test_split, executable=sys.executable,
                   gpu=torch.cuda.get_device_name(), **metrics)
     result.update(cafbr_state)
     write_json(output, result)
     history = ExperimentHistory(args.checkpoint.parent.parent, config)
     tracker = WandbTracker(args, history, resume=True)
-    row = history.record("test", checkpoint["iteration"], metrics, data_split="test",
+    row = history.record("test", checkpoint["iteration"], metrics, data_split=test_split,
                          **cafbr_state,
                          role="standalone evaluation", checkpoint=str(args.checkpoint.resolve()),
                          checkpoint_sha256=file_digest(args.checkpoint))

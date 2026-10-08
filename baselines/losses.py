@@ -1,4 +1,4 @@
-"""Pixel CE and source-compatible multiclass soft Dice for native CAFBR FMamba."""
+"""Pixel CE and multiclass soft Dice shared by FMamba and UNet controls."""
 
 import torch
 from torch.nn import functional as F

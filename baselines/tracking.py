@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .checkpoints import write_json
 from .metrics import METRIC_NAMES
+from .data import dataset_splits
 
 
 def timestamp():
@@ -41,10 +42,12 @@ class ExperimentHistory:
         if self.path.exists():
             self.data = json.loads(self.path.read_text())
         else:
+            splits = dataset_splits(config)
             self.data = dict(schema_version=1, run_id=uuid.uuid4().hex, created_at=timestamp(),
                              config=config, protocol=dict(train="original train split",
-                             validation="original test split", test="original test split; final best checkpoint",
+                             validation=f"original {splits['validation']} split", test=f"original {splits['test']} split; final best checkpoint",
                              selection_metric=config["selection_metric"],
+                             train_loss_only=config.get("train_loss_only", False),
                              metric_unit="percent", evaluation_augmentation=False),
                              training=[], train=[], validation=[], test=[], sessions=[])
         self.data["sessions"].append(dict(started_at=timestamp(), executable=sys.executable, config=config))
@@ -83,8 +86,10 @@ class ExperimentHistory:
         fig, axis = plt.subplots(figsize=(10, 5))
         for split, label in [("training", "Training batches (optimized loss)"),
                              ("train", "Full train split (eval mode)"),
-                             ("validation", "Validation (test split)")]:
+                             ("validation", f"Validation ({self.data['config'].get('validation_split', 'test')} split)")]:
             rows = self.data[split]
+            if not rows:
+                continue
             axis.plot([row["iteration"] for row in rows], [row["loss"] for row in rows], label=label)
         for index, row in enumerate(self.data["test"]):
             axis.scatter(row["iteration"], row["loss"], marker="*", s=120,
@@ -97,8 +102,10 @@ class ExperimentHistory:
         plt.close(fig)
         fig, axes = plt.subplots(2, 4, figsize=(16, 8))
         for axis, key in zip(axes.flat, METRIC_NAMES):
-            for split, label in [("train", "Train"), ("validation", "Validation (test)")]:
+            for split, label in [("train", "Train"), ("validation", f"Validation ({self.data['config'].get('validation_split', 'test')})")]:
                 rows = self.data[split]
+                if not rows:
+                    continue
                 axis.plot([row["iteration"] for row in rows],
                           [float("nan") if row[key] is None else row[key] for row in rows], marker="o", label=label)
             for index, row in enumerate(self.data["test"]):
@@ -130,8 +137,10 @@ class WandbTracker:
         # environment manifests and code provenance in the local JSON only.
         cloud_config = {key: config[key] for key in (
             "dataset", "model", "classes", "image_size", "base_channels", "batch_size",
-            "max_iters", "val_interval", "lr", "weight_decay", "poly_power", "seed", "amp",
-            "loss", "fmamba", "lsmamba", "mask2former", "cafbr_start_ratio"
+            "grad_accum_steps", "effective_batch_size",
+            "max_iters", "val_interval", "lr", "weight_decay", "poly_power", "lr_schedule", "min_lr_ratio",
+            "warmup_ratio", "warmup_start_factor", "seed", "amp",
+            "loss", "fmamba", "lsmamba", "mask2former", "cafbr_start_ratio", "validation_split", "test_split", "train_loss_only"
         ) if key in config}
         self.run = wandb.init(
             project=args.wandb_project, entity=args.wandb_entity, id=run_id,
@@ -168,7 +177,7 @@ class WandbTracker:
         if self.run is None:
             return
         payload = {"iteration": row["iteration"]}
-        for key in ("loss", "ce_loss", "lr", "samples", "cafbr_enabled", "cafbr_start_iteration", *METRIC_NAMES):
+        for key in ("loss", "ce_loss", "lr", "samples", "batches", "optimizer_updates", "micro_batches_completed", "grad_accum_steps", "effective_batch_size", "cafbr_enabled", "cafbr_start_iteration", *METRIC_NAMES):
             value = row.get(key)
             if isinstance(value, (int, float)) and math.isfinite(value):
                 payload[f"{split}/{key}"] = value
@@ -191,7 +200,8 @@ class WandbTracker:
                 self.run.summary[f"best_test/{key}"] = self.history.data["test"][-1][key]
         artifact = wandb.Artifact(f"history-{self.history.data['run_id']}", type="metrics")
         fields = ("iteration", "recorded_at", "loss", "ce_loss", "lr", "samples", "batches",
-                  "cafbr_enabled", "cafbr_start_iteration",
+                  "cafbr_enabled", "cafbr_start_iteration", "optimizer_updates",
+                  "micro_batches_completed", "grad_accum_steps", "effective_batch_size",
                   "first_iteration", "per_class", "confusion_matrix", *METRIC_NAMES)
         cloud_history = {split: [{key: row[key] for key in fields if key in row}
                                 for row in self.history.data[split]]

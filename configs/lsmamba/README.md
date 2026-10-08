@@ -32,8 +32,8 @@ The scan wrapper also accepts the spectral branch's ungrouped B/C tensors.
 
 The shared pipeline uses 120 training images and 30 test images; the test split
 also supplies validation and checkpoint selection. Settings are 256x256 crops,
-batch 4, AdamW lr 1e-4, weight decay 0.05, PolyLR power 0.9, 40,000 iterations,
-validation every 4,000, seed 42, FP32 and four workers. This transfers the
+batch 4, AdamW lr 1e-4, weight decay 0.05, 10% linear warmup followed by cosine decay, 40,000 iterations,
+validation every 2,000, seed 42, FP32 and four workers. This transfers the
 architecture into the current experiment protocol; it does not reproduce the
 original paper's dataset or reported scores. LS-Mamba has no CAFBR module or
 delayed CAFBR schedule.
@@ -43,14 +43,14 @@ bash scripts/train/HRC_WHU/train_lsmamba.sh --wandb
 bash scripts/train/HRC_WHU/train_lsmamba_mask2former.sh --wandb
 
 /home/jzx/anaconda3/envs/qwen3/bin/python tools/test_lsmamba.py \
-  experiments/HRC_WHU/LSMamba/checkpoints/best.pth
+  experiments/HRC_WHU/LSMamba_warmup_cosine/checkpoints/best.pth
 
 bash scripts/train/HRC_WHU/train_lsmamba.sh \
-  --resume experiments/HRC_WHU/LSMamba/checkpoints/last.pth
+  --resume experiments/HRC_WHU/LSMamba_warmup_cosine/checkpoints/last.pth
 ```
 
-Outputs are `experiments/HRC_WHU/LSMamba/` and
-`experiments/HRC_WHU/LSMamba_Mask2Former/`. Both support tqdm, validation-loss
+Outputs are `experiments/HRC_WHU/LSMamba_warmup_cosine/` and
+`experiments/HRC_WHU/LSMamba_Mask2Former_warmup_cosine/`. Both support tqdm, validation-loss
 printing, optional W&B, complete `results.json` split histories, local loss/metric
 plots, all seven existing segmentation metrics and per-class confusion records.
 Checkpoints keep the top three mIoUs plus last and best; training ends by testing
@@ -74,3 +74,9 @@ long-run variation. Peak allocated GPU memory was 8.06 GiB. This is a short-run
 measurement, not a completed full training run. The small timing report is
 saved at `experiments/HRC_WHU/LSMamba_benchmark/timing_estimate.json`; benchmark
 checkpoint files are automatically removed.
+
+Completed PolyLR runs retain their saved configuration. To evaluate/resume an
+older run, use its saved `config.json` rather than the new default config.
+The new schedule requires a fresh run; the shared trainer rejects a scheduler
+change during resume. `lr_schedule="cosine"`, `warmup_ratio=0.1`,
+`warmup_start_factor=0.01`, `min_lr_ratio=0.0` are the current HRC defaults.

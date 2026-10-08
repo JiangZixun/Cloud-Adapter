@@ -22,8 +22,8 @@ Run from the repository root:
 Defaults in `hrc_whu.json`: original 120 training images, all 30 test images used
 for validation/checkpoint selection as explicitly requested, RGB ImageNet
 normalization, 256x256, batch size 4, AdamW (lr 1e-4, weight decay .05), pixel
-cross-entropy loss, 40,000 iterations, PolyLR power .9 without warmup, validation
-every 4,000 iterations, seed 42. All UNet parameters are trained. Training uses
+cross-entropy loss, 40,000 iterations, 10% linear warmup followed by cosine decay, validation
+every 2,000 iterations, seed 42. All UNet parameters are trained. Training uses
 random crops, horizontal flips and brightness/contrast/saturation jitter. Palette
 mask indices are preserved; classes are clear sky=0 and cloud=1, ignore index=255.
 The split manifests elsewhere in the data root are deliberately not used.
@@ -35,7 +35,7 @@ held-out evaluation.
 Outputs:
 
 ```text
-experiments/HRC_WHU/UNet/
+experiments/HRC_WHU/UNet_warmup_cosine/
   config.json                 # resolved training settings
   environment.json            # runtime, device, sample counts, split protocol
   data_manifest.json          # exact image/mask pairs
@@ -65,14 +65,14 @@ Resume an interrupted run with the same configuration and directory:
 
 ```bash
 /home/jzx/anaconda3/envs/qwen3/bin/python tools/train_unet.py \
-  --resume experiments/HRC_WHU/UNet/checkpoints/last.pth
+  --resume experiments/HRC_WHU/UNet_warmup_cosine/checkpoints/last.pth
 ```
 
 To evaluate a checkpoint separately:
 
 ```bash
 /home/jzx/anaconda3/envs/qwen3/bin/python tools/train_unet.py \
-  --evaluate experiments/HRC_WHU/UNet/checkpoints/best.pth
+  --evaluate experiments/HRC_WHU/UNet_warmup_cosine/checkpoints/best.pth
 ```
 
 Smoke test (5 training iterations, first 8 training images, 16 base channels,
@@ -91,7 +91,7 @@ Existing saved output directories are protected: use `--resume` or choose a new
 `--max-iters`, `--val-interval`, `--batch-size`, `--num-workers`, `--device`,
 `--data-root`, and `--amp`. When evaluating/resuming smoke checkpoints, include
 `--smoke-test` to select the matching architecture. Changing `max_iters` changes
-the PolyLR horizon; use the original horizon when resuming a full experiment.
+the learning-rate schedule horizon; use the original horizon when resuming a full experiment.
 
 Visualize representative training/test samples through the same dataset loader:
 
@@ -105,3 +105,37 @@ original RGB/mask/overlay with the loader's augmented RGB/mask/overlay. Test pan
 show the loader's RGB/mask/overlay. Normalized tensors are denormalized for display;
 gold indicates cloud label 1, black indicates clear sky label 0. Colors are display
 choices and do not modify training masks.
+
+## Matched 5CE + 5Dice control
+
+Run the same UNet with the native CAFBR FMamba loss:
+
+```bash
+bash scripts/train/HRC_WHU/train_unet_ce5_dice5.sh
+# Optional W&B logging:
+bash scripts/train/HRC_WHU/train_unet_ce5_dice5.sh --wandb
+```
+
+`hrc_whu_ce5_dice5.json` keeps the original UNet settings and adds
+`loss: {ce_weight: 5.0, dice_weight: 5.0, dice_eps: 1e-5}`. An explicit UNet
+`loss` block selects the shared FMamba CE/Dice implementation; without this block,
+UNet still uses plain CE. Soft Dice includes both classes and pools batch/spatial
+dimensions, ignoring label 255. The new output directory is
+`experiments/HRC_WHU/UNet_CE5_Dice5_warmup_cosine/`. Start this control from scratch; the old
+CE checkpoint has a different objective and cannot be resumed with this config.
+Evaluation reports `loss` as the configured objective and `ce_loss`/`val_loss`
+as plain CE. Smoke runs should use a separate explicit directory:
+
+```bash
+bash scripts/train/HRC_WHU/train_unet_ce5_dice5.sh --smoke-test \
+  --work-dir /tmp/unet_ce5_dice5_smoke
+```
+
+Training analysis and the next experiment plan are in
+[the HRC-WHU tuning plan](../../docs/hrc_whu_cafbr_tuning_plan.md).
+
+Completed PolyLR runs retain their saved configuration. To evaluate/resume an
+older run, use its saved `config.json` rather than the new default config.
+The new schedule requires a fresh run; the shared trainer rejects a scheduler
+change during resume. `lr_schedule="cosine"`, `warmup_ratio=0.1`,
+`warmup_start_factor=0.01`, `min_lr_ratio=0.0` are the current HRC defaults.

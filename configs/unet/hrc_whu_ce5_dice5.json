@@ -1,8 +1,8 @@
 {
   "dataset": "HRC_WHU",
-  "model": "LSMamba_Mask2Former",
+  "model": "UNet",
   "data_root": "/mnt/data1/Dataset/Cloud-Adapter/hrc_whu",
-  "work_dir": "experiments/HRC_WHU/LSMamba_Mask2Former_warmup_cosine",
+  "work_dir": "experiments/HRC_WHU/UNet_CE5_Dice5_warmup_cosine",
   "classes": [
     "clear sky",
     "cloud"
@@ -35,36 +35,10 @@
   "keep_top_k": 3,
   "selection_metric": "mIoU",
   "ignore_index": 255,
-  "mask2former": {
-    "feature_size": 256,
-    "mask_feature_size": 256,
-    "hidden_dim": 256,
-    "encoder_layers": 6,
-    "decoder_layers": 10,
-    "num_attention_heads": 8,
-    "num_queries": 100,
-    "class_weight": 2.0,
-    "mask_weight": 5.0,
+  "loss": {
+    "ce_weight": 5.0,
     "dice_weight": 5.0,
-    "no_object_weight": 0.1,
-    "train_num_points": 12544,
-    "use_auxiliary_loss": true,
-    "dropout": 0.0
-  },
-  "lsmamba": {
-    "depths": [
-      2,
-      2,
-      2,
-      2
-    ],
-    "depths_decoder": [
-      2,
-      2,
-      2,
-      2
-    ],
-    "drop_path_rate": 0.2
+    "dice_eps": 1e-05
   },
   "lr_schedule": "cosine",
   "warmup_ratio": 0.1,

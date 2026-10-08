@@ -1,4 +1,4 @@
-"""Train/evaluate a standalone U-Net baseline on original HRC-WHU splits."""
+"""Train cloud segmentation baselines with explicit validation and test splits."""
 
 import argparse
 import csv
@@ -17,11 +17,13 @@ from tqdm.auto import tqdm
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from baselines.checkpoints import CheckpointManager, write_json
-from baselines.data import CloudDataset, IterationBatchSampler
+from baselines.lr_schedule import lr_multiplier, warmup_steps, validate_resume_schedule
+from baselines.data import CloudDataset, IterationBatchSampler, dataset_splits
 from baselines.metrics import METRIC_NAMES, confusion_matrix, segmentation_metrics
 from baselines.model_factory import build_model, prediction_logits, training_loss
 from baselines.tracking import ExperimentHistory, WandbTracker, add_wandb_arguments, file_digest
 from baselines.run_directory import prepare_fresh_run
+from baselines.optimization import accumulation_steps, accumulated_update
 from baselines.cafbr_schedule import apply_cafbr_schedule, cafbr_start_iteration, restore_cafbr_state
 
 
@@ -34,10 +36,14 @@ def parse_args(default_config=None):
     parser.add_argument("--max-iters", type=int)
     parser.add_argument("--val-interval", type=int)
     parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--grad-accum-steps", type=int, help="Physical batches per optimizer update (default: configuration or 1)")
     parser.add_argument("--num-workers", type=int)
+    parser.add_argument("--lr", type=float)
+    parser.add_argument("--warmup-ratio", type=float)
+    parser.add_argument("--warmup-start-factor", type=float)
     parser.add_argument("--amp", action="store_true")
     parser.add_argument("--smoke-test", action="store_true",
-                        help="5 iterations, 8 training images, full test validation; UNet alone uses reduced width")
+                        help="5 iterations, 8 train images; optional configured smoke validation/test limits")
     parser.add_argument("--resume", type=Path, help="Resume the same run from its last.pth")
     parser.add_argument("--evaluate", type=Path, help="Evaluate a checkpoint without training")
     add_wandb_arguments(parser)
@@ -83,9 +89,9 @@ def _evaluate(model, loader, device, config, description, show_progress):
     return metrics
 
 
-def append_metrics(directory, iteration, lr, train_loss, metrics):
+def append_metrics(directory, iteration, lr, train_loss, metrics, validation_split="test"):
     record = dict(iteration=iteration, lr=lr, train_loss=train_loss,
-                  validation_split="test", **metrics)
+                  validation_split=validation_split, **metrics)
     with (directory / "metrics.jsonl").open("a") as stream:
         stream.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + "\n")
     csv_path = directory / "metrics.csv"
@@ -111,18 +117,28 @@ def main(default_config=None):
     if args.smoke_test:
         config.update(max_iters=5, val_interval=1, log_interval=1, num_workers=0,
                       train_limit=8, work_dir=f"experiments/{config['dataset']}/{config['model']}_smoke")
+        for split in ("val", "test"):
+            if f"smoke_{split}_limit" in config:
+                config[f"{split}_limit"] = config[f"smoke_{split}_limit"]
         if config["model"] == "UNet":
             config["base_channels"] = 16
-    for name in ("data_root", "work_dir", "device", "max_iters", "val_interval", "batch_size", "num_workers"):
+    for name in ("data_root", "work_dir", "device", "max_iters", "val_interval", "batch_size", "grad_accum_steps", "num_workers", "lr", "warmup_ratio", "warmup_start_factor"):
         value = getattr(args, name)
         if value is not None:
             config[name] = str(value) if isinstance(value, Path) else value
+    config["grad_accum_steps"] = accumulation_steps(config)
+    config["effective_batch_size"] = config["batch_size"] * config["grad_accum_steps"]
+    warmup_steps(config)  # Validate the schedule before creating outputs.
+    if not np.isfinite(config["lr"]) or config["lr"] <= 0:
+        raise ValueError("lr must be finite and positive")
     config["amp"] = config["amp"] or args.amp
     for name in ("max_iters", "val_interval", "log_interval", "batch_size", "keep_top_k", "base_channels"):
         if config[name] <= 0:
             raise ValueError(f"{name} must be positive")
     if config["num_workers"] < 0 or config["selection_metric"] not in METRIC_NAMES:
         raise ValueError("Invalid worker count or selection metric")
+    # Training computes only the optimization loss; metrics belong to validation/test.
+    config["train_loss_only"] = True
     directory = Path(config["work_dir"])
     if not directory.is_absolute():
         directory = ROOT / directory
@@ -146,24 +162,34 @@ def main(default_config=None):
     checkpoint = None
     if args.resume or args.evaluate:
         checkpoint = torch.load(args.resume or args.evaluate, map_location="cpu", weights_only=True)
-        for name in ("model", "fmamba", "lsmamba", "mask2former", "loss", "classes", "base_channels", "image_size", "mean", "std", "data_root", "seed", "batch_size", "amp", "train_limit"):
+        for name in ("model", "fmamba", "lsmamba", "mask2former", "loss", "classes", "base_channels", "image_size", "mean", "std", "data_root", "seed", "batch_size", "amp", "train_limit", "val_limit", "test_limit", "validation_split", "test_split"):
             if checkpoint["config"].get(name) != config.get(name):
                 raise ValueError(f"Checkpoint configuration mismatch: {name}")
+        if args.resume:
+            if accumulation_steps(checkpoint["config"]) != config["grad_accum_steps"]:
+                raise ValueError("Checkpoint configuration mismatch: grad_accum_steps; start a new run")
+            validate_resume_schedule(checkpoint["config"], config)
         model.load_state_dict(checkpoint["model"])
         restore_cafbr_state(model, checkpoint)
         if args.resume and checkpoint["config"].get("cafbr_start_ratio", 0.0) != config.get("cafbr_start_ratio", 0.0):
             raise ValueError("Checkpoint configuration mismatch: cafbr_start_ratio; start a new run for the delayed schedule")
-    val_dataset = CloudDataset(config, "test")
+    splits = dataset_splits(config)
+    val_dataset = CloudDataset(config, splits["validation"], config.get("val_limit"))
+    val_dataset.split = "evaluation"
     val_loader = DataLoader(val_dataset, batch_size=config["batch_size"],
                             num_workers=config["num_workers"], pin_memory=device.type == "cuda")
     if args.evaluate:
-        metrics = evaluate(model, val_loader, device, config, description="Test")
+        test_dataset = CloudDataset(config, splits["test"], config.get("test_limit"))
+        test_dataset.split = "evaluation"
+        test_loader = DataLoader(test_dataset, batch_size=config["batch_size"],
+                                 num_workers=config["num_workers"], pin_memory=device.type == "cuda")
+        metrics = evaluate(model, test_loader, device, config, description="Test")
         history = ExperimentHistory(directory, config)
         tracker = WandbTracker(args, history, resume=True)
         row = history.record("test", checkpoint["iteration"], metrics,
                              **restore_cafbr_state(model, checkpoint),
                              checkpoint=str(args.evaluate.resolve()), checkpoint_sha256=file_digest(args.evaluate),
-                             data_split="test", role="standalone evaluation")
+                             data_split=splits["test"], role="standalone evaluation")
         history.render()
         tracker.log("test", row)
         tracker.finish()
@@ -183,22 +209,18 @@ def main(default_config=None):
         if not history or history[-1]["iteration"] != checkpoint["iteration"]:
             raise ValueError("Checkpoint iteration and metrics history do not match")
     train_dataset = CloudDataset(config, "train", config.get("train_limit"))
-    train_eval_dataset = CloudDataset(config, "train", config.get("train_limit"))
-    train_eval_dataset.split = "evaluation"  # Preserve train paths; bypass random crop/flip/jitter.
-    train_eval_loader = DataLoader(train_eval_dataset, batch_size=config["batch_size"],
-                                  num_workers=config["num_workers"], pin_memory=device.type == "cuda")
     start_iter = checkpoint["iteration"] if checkpoint else 0
     if start_iter >= config["max_iters"]:
         raise ValueError("max_iters must be greater than the resumed iteration")
     train_loader = DataLoader(
         train_dataset,
-        batch_sampler=IterationBatchSampler(len(train_dataset), config["batch_size"], start_iter,
-                                            config["max_iters"], config["seed"]),
+        batch_sampler=IterationBatchSampler(len(train_dataset), config["batch_size"], start_iter * config["grad_accum_steps"],
+                                            config["max_iters"] * config["grad_accum_steps"], config["seed"]),
         num_workers=config["num_workers"], pin_memory=device.type == "cuda",
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"])
     scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lambda step: max(0, 1 - step / config["max_iters"]) ** config["poly_power"]
+        optimizer, lambda step: lr_multiplier(step, config)
     )
     scaler = torch.amp.GradScaler("cuda", enabled=config["amp"])
     if checkpoint:
@@ -210,7 +232,7 @@ def main(default_config=None):
             scheduler = torch.optim.lr_scheduler.LambdaLR(
                 optimizer, scheduler.lr_lambdas, last_epoch=start_iter - 1
             )
-            print(f"Updated PolyLR horizon to {config['max_iters']} iterations", flush=True)
+            print(f"Updated LR schedule horizon to {config['max_iters']} iterations", flush=True)
         scaler.load_state_dict(checkpoint["scaler"])
         torch.set_rng_state(checkpoint["torch_rng"])
         if device.type == "cuda":
@@ -224,11 +246,18 @@ def main(default_config=None):
         "cuda": torch.version.cuda, "model": config["model"],
         "parameters": sum(parameter.numel() for parameter in model.parameters()),
         "train_samples": len(train_dataset), "validation_samples": len(val_dataset),
-        "validation_split": "test", "checkpoint_selection_split": "test",
+        "validation_split": splits["validation"], "checkpoint_selection_split": splits["validation"],
+        "test_split": splits["test"],
+        "train_loss_only": True,
+        "physical_batch_size": config["batch_size"],
+        "grad_accum_steps": config["grad_accum_steps"],
+        "effective_batch_size": config["effective_batch_size"],
+        "iteration_unit": "optimizer update",
     })
     write_json(directory / "data_manifest.json", {
         split: [{"image": str(image), "mask": str(mask)} for image, mask in dataset.pairs]
-        for split, dataset in (("train", train_dataset), ("test", val_dataset))
+        for split, dataset in (("train", train_dataset), ("validation", val_dataset),
+                               ("test", CloudDataset(config, splits["test"], config.get("test_limit"))))
     })
     manager = CheckpointManager(directory / "checkpoints", config["keep_top_k"], config["selection_metric"])
     history = ExperimentHistory(directory, config)
@@ -236,63 +265,50 @@ def main(default_config=None):
     tracker = WandbTracker(args, history, resume=bool(args.resume))
     loss_sum, loss_steps = 0.0, 0
     window_loss, window_steps = 0.0, 0
-    window_matrix = torch.zeros((len(config["classes"]),) * 2, dtype=torch.int64, device=device)
-    print(f"{device}: train={len(train_dataset)}, validation(test)={len(val_dataset)}, output={directory}", flush=True)
+    print(f"{device}: train={len(train_dataset)}, validation({splits['validation']})={len(val_dataset)}, batch={config['batch_size']} x accum={config['grad_accum_steps']} (effective={config['effective_batch_size']}), output={directory}", flush=True)
     with (directory / "train.log").open("a") as log:
-        progress = tqdm(train_loader, total=config["max_iters"], initial=start_iter,
+        train_iterator = iter(train_loader)
+        progress = tqdm(range(start_iter + 1, config["max_iters"] + 1), total=config["max_iters"], initial=start_iter,
                         desc=f"Train {config['model']}", dynamic_ncols=True)
-        for iteration, (images, labels) in enumerate(progress, start_iter + 1):
+        for iteration in progress:
             model.train()
             cafbr_state = apply_cafbr_schedule(model, config, iteration)
-            images, labels = images.to(device), labels.to(device)
-            optimizer.zero_grad(set_to_none=True)
             lr = optimizer.param_groups[0]["lr"]
-            with torch.autocast(device_type=device.type, enabled=config["amp"]):
-                output = model(images)
-                loss = training_loss(model, output, labels, config)
-            if not torch.isfinite(loss):
-                raise FloatingPointError(f"Non-finite training loss at iteration {iteration}")
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            loss_value = accumulated_update(model, train_iterator, optimizer, scaler,
+                                            device, config, training_loss)
             scheduler.step()
-            loss_sum += loss.item()
+            loss_sum += loss_value
             loss_steps += 1
-            window_loss += loss.item()
+            window_loss += loss_value
             window_steps += 1
-            with torch.no_grad():
-                logits = prediction_logits(output, labels.shape[-2:])
-                window_matrix += confusion_matrix(logits.argmax(1), labels, len(config["classes"]), config["ignore_index"])
-            postfix = dict(loss=f"{loss.item():.4f}", lr=f"{lr:.3g}")
+            postfix = dict(loss=f"{loss_value:.4f}", lr=f"{lr:.3g}")
             if cafbr_state:
                 postfix["CAFBR"] = "on" if cafbr_state["cafbr_enabled"] else "off"
             progress.set_postfix(postfix, refresh=False)
             validation_due = iteration % config["val_interval"] == 0 or iteration == config["max_iters"]
             phase_boundary = cafbr_state and iteration == cafbr_state["cafbr_start_iteration"] - 1
             if iteration % config["log_interval"] == 0 or validation_due or phase_boundary:
-                online = segmentation_metrics(window_matrix, config["classes"])
-                row = history.record("training", iteration, dict(loss=window_loss / window_steps, lr=lr, **online),
-                                     first_iteration=iteration - window_steps + 1, batches=window_steps,
+                row = history.record("training", iteration, dict(loss=window_loss / window_steps, lr=lr),
+                                     first_iteration=iteration - window_steps + 1,
+                                     batches=window_steps * config["grad_accum_steps"], optimizer_updates=window_steps,
+                                     samples=window_steps * config["effective_batch_size"],
+                                     micro_batches_completed=iteration * config["grad_accum_steps"],
+                                     grad_accum_steps=config["grad_accum_steps"], effective_batch_size=config["effective_batch_size"],
                                      **cafbr_state,
                                      data_split="train", role="augmented training batches; evolving model weights")
                 tracker.log("optimization", row)
+                tracker.log("train", row)
                 window_loss, window_steps = 0.0, 0
-                window_matrix.zero_()
-                message = f"iter={iteration} loss={loss.item():.6f} lr={lr:.8g}"
+                message = f"iter={iteration} loss={loss_value:.6f} lr={lr:.8g}"
                 log.write(message + "\n")
                 log.flush()
             if validation_due:
-                train_metrics = evaluate(model, train_eval_loader, device, config, description="Train split evaluation")
                 metrics = evaluate(model, val_loader, device, config)
-                append_metrics(directory, iteration, lr, loss_sum / loss_steps, metrics)
+                append_metrics(directory, iteration, lr, loss_sum / loss_steps, metrics, splits["validation"])
                 checkpoint_path = str(directory / "checkpoints" / f"iter_{iteration:07d}.pth")
-                train_row = history.record("train", iteration, train_metrics, data_split="train",
-                                           **cafbr_state,
-                                           role="full train split; eval mode; no augmentation", checkpoint=checkpoint_path)
-                val_row = history.record("validation", iteration, metrics, data_split="test",
+                val_row = history.record("validation", iteration, metrics, data_split=splits["validation"],
                                          **cafbr_state,
                                          role="checkpoint selection", checkpoint=checkpoint_path)
-                tracker.log("train", train_row)
                 tracker.log("validation", val_row)
                 history.render()
                 state = dict(iteration=iteration, model=model.state_dict(), optimizer=optimizer.state_dict(),
@@ -310,13 +326,17 @@ def main(default_config=None):
     best = torch.load(directory / "checkpoints/best.pth", map_location="cpu", weights_only=True)
     model.load_state_dict(best["model"])
     best_cafbr_state = restore_cafbr_state(model, best)
-    best_metrics = evaluate(model, val_loader, device, config, description="Test best checkpoint")
+    test_dataset = CloudDataset(config, splits["test"], config.get("test_limit"))
+    test_dataset.split = "evaluation"
+    test_loader = DataLoader(test_dataset, batch_size=config["batch_size"],
+                             num_workers=config["num_workers"], pin_memory=device.type == "cuda")
+    best_metrics = evaluate(model, test_loader, device, config, description="Test best checkpoint")
     write_json(directory / "best_metrics.json", {
         "iteration": best["iteration"], "checkpoint": "checkpoints/best.pth",
-        "validation_split": "test", **best_metrics,
+        "validation_split": splits["validation"], "test_split": splits["test"], **best_metrics,
         **best_cafbr_state,
     })
-    test_row = history.record("test", best["iteration"], best_metrics, data_split="test",
+    test_row = history.record("test", best["iteration"], best_metrics, data_split=splits["test"],
                               **best_cafbr_state,
                               role="final best checkpoint evaluation", checkpoint="checkpoints/best.pth",
                               checkpoint_sha256=file_digest(directory / "checkpoints/best.pth"))
@@ -325,7 +345,7 @@ def main(default_config=None):
     history.render()
     tracker.log("test", test_row)
     tracker.finish()
-    print(f"Finished. Best iteration={best['iteration']}, mIoU={best_metrics['mIoU']:.4f}", flush=True)
+    print(f"Finished. Best iteration={best['iteration']}, validation mIoU={best['metrics']['mIoU']:.4f}, test mIoU={best_metrics['mIoU']:.4f}", flush=True)
 
 
 if __name__ == "__main__":

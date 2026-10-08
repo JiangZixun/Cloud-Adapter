@@ -1,4 +1,4 @@
-"""Read original HRC-WHU PNG pairs; validation always uses the test split."""
+"""Read paired RGB cloud PNG datasets with explicit train/validation/test splits."""
 
 import random
 from pathlib import Path
@@ -9,9 +9,17 @@ from PIL import Image, ImageEnhance
 from torch.utils.data import Dataset, Sampler
 
 
+def dataset_splits(config):
+    splits = dict(train="train", validation=config.get("validation_split", "test"),
+                  test=config.get("test_split", "test"))
+    if any(split not in {"train", "val", "test"} for split in splits.values()):
+        raise ValueError("Dataset splits must be train, val or test")
+    return splits
+
+
 class CloudDataset(Dataset):
     def __init__(self, config, split, limit=None):
-        self.config, self.split = config, split
+        self.config, self.split, self.source_split = config, split, split
         root = Path(config["data_root"])
         image_dir, mask_dir = root / "img_dir" / split, root / "ann_dir" / split
         images, masks = sorted(image_dir.glob("*.png")), sorted(mask_dir.glob("*.png"))
@@ -33,7 +41,7 @@ class CloudDataset(Dataset):
         with Image.open(image_path) as source:
             image = source.convert("RGB")
         with Image.open(mask_path) as source:
-            # Preserve palette indices (0/1), rather than converting palette colors.
+            # Preserve class palette indices rather than converting palette colors.
             mask = Image.fromarray(np.array(source))
         if image.size != mask.size:
             raise ValueError(f"Image/mask sizes differ: {image_path}")

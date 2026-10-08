@@ -1,5 +1,8 @@
 # CAFBR FMamba on HRC-WHU
 
+For the four CloudSEN12 L1C/L2A native/Mask2Former experiments, see
+[the CloudSEN12 guide](cloudsen12_README.md).
+
 The trainer includes tqdm progress, unified train/validation/test JSON history,
 local loss/metric curves and opt-in `--wandb` cloud logging. See
 [experiment tracking](../experiment_tracking.md).
@@ -63,7 +66,7 @@ Original splits: `img_dir/train` + `ann_dir/train` (120 images), and
 `img_dir/test` + `ann_dir/test` (30 images). As requested, test is also used for
 validation and checkpoint selection. Settings shared with UNet: RGB ImageNet
 normalization, crop size 256, batch size 4, four workers, AdamW lr 1e-4 and decay
-.05, PolyLR power .9 without warmup, 40,000 iterations, validation every 4,000,
+.05, 10% linear warmup followed by cosine decay, 40,000 iterations, validation every 2,000,
 seed 42, FP32. No synthetic validation split or external split manifest is used.
 
 Both variants set `cafbr_start_ratio: 0.5`: iterations 1–20,000 bypass all four
@@ -89,16 +92,16 @@ when tested. The midpoint follows `max_iters`, including smoke-test overrides.
 
 # Test either variant: its model config is loaded from the checkpoint
 /home/jzx/anaconda3/envs/qwen3/bin/python tools/test_fmamba.py \
-  experiments/HRC_WHU/FMamba_CAFBR/checkpoints/best.pth
+  experiments/HRC_WHU/FMamba_CAFBR_warmup_cosine/checkpoints/best.pth
 
 # Resume the same experiment
 /home/jzx/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
   --config configs/fmamba/hrc_whu_native.json \
-  --resume experiments/HRC_WHU/FMamba_CAFBR/checkpoints/last.pth
+  --resume experiments/HRC_WHU/FMamba_CAFBR_warmup_cosine/checkpoints/last.pth
 ```
 
-Outputs live at `experiments/HRC_WHU/FMamba_CAFBR/` and
-`experiments/HRC_WHU/FMamba_CAFBR_Mask2Former/`. Each validation writes
+Outputs live at `experiments/HRC_WHU/FMamba_CAFBR_warmup_cosine/` and
+`experiments/HRC_WHU/FMamba_CAFBR_Mask2Former_warmup_cosine/`. Each validation writes
 `metrics.csv`, `metrics.jsonl`, and `validation/iter_XXXXXXX.json`, including aAcc,
 mIoU, mAcc, mDice, mFscore, mPrecision, mRecall, per-class metrics, confusion
 matrix, pixel validation loss and timing. Percentages are unrounded; undefined
@@ -138,3 +141,25 @@ GPU memory. For 40,000 iterations, ten validations and the final best evaluation
 the measured extrapolation is about 3 hours 24 minutes; allow roughly 3.5–4 hours
 for a full run on an otherwise idle GPU. This is a short-run estimate, not a
 completed full training run or a final quality result.
+
+## HRC-WHU warmup and LR tuning
+
+All HRC-WHU models now use 10% linear warmup followed by cosine decay,
+with validation every 2,000 iterations. Completed
+runs retain their saved configurations. The tuning controls keep 5CE+5Dice:
+
+```bash
+python tools/train_fmamba.py --config configs/fmamba/hrc_whu_native_warmup.json
+```
+
+The warmup config uses 10% of 40,000 steps (4,000), linearly increasing LR from
+1% of the target LR, then applying cosine decay over the remaining steps. Optional
+CLI overrides: `--lr`, `--warmup-ratio`, `--warmup-start-factor`. Use a new
+`--work-dir` for each LR trial; schedule changes require a fresh run.
+See [the updated tuning plan](../../docs/hrc_whu_cafbr_tuning_plan.md).
+
+Completed PolyLR runs retain their saved configuration. To evaluate/resume an
+older run, use its saved `config.json` rather than the new default config.
+The new schedule requires a fresh run; the shared trainer rejects a scheduler
+change during resume. `lr_schedule="cosine"`, `warmup_ratio=0.1`,
+`warmup_start_factor=0.01`, `min_lr_ratio=0.0` are the current HRC defaults.
