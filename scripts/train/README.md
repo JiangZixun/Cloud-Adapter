@@ -69,3 +69,35 @@ files/training logs, no checkpoint and no validation/test results is automatical
 preserved in a sibling `<Model>_incomplete_<timestamp>` directory before restarting.
 Existing saved runs require `--resume` or a new `--work-dir`. Add launchers for other datasets after
 their corresponding model/data configurations have been prepared.
+
+## CAFBR duration, phase LR and activation tuning
+
+Four HRC-WHU native CAFBR runs use the best tested target LR, `3e-5`,
+5CE + 5Dice, batch 4, seed 42, and `keep_top_k=1` (one ranked checkpoint,
+its `best.pth` copy, and `last.pth` for resume):
+
+```bash
+bash scripts/train/HRC_WHU/train_fmamba_cafbr_30k.sh --wandb
+bash scripts/train/HRC_WHU/train_fmamba_cafbr_40k_two_phase.sh --wandb
+bash scripts/train/HRC_WHU/train_fmamba_cafbr_30k_cafbr25.sh --wandb
+bash scripts/train/HRC_WHU/train_fmamba_cafbr_30k_cafbr75.sh --wandb
+```
+
+`start_train.sh` runs these four sequentially and stops on failure. Each uses
+its own JSON in `configs/fmamba/tuning/` and a separate output directory.
+The 30k runs activate CAFBR at updates 15,001, 7,501 and 22,501, respectively,
+and use a single 3,000-update warmup followed by cosine decay. The 40k run uses
+`cosine_cafbr_phase`: two 20k phases, each with a 2,000-update warmup followed
+by cosine decay. LR restarts when CAFBR activates at update 20,001; AdamW
+and model states continue across this boundary.
+
+For a short CUDA smoke that includes both phases, use an independent directory:
+
+```bash
+bash scripts/train/HRC_WHU/train_fmamba_cafbr_40k_two_phase.sh \
+  --smoke-test --max-iters 20 --val-interval 5 \
+  --work-dir /tmp/cloud_adapter_two_phase_smoke
+```
+
+This uses eight train images and all 30 validation/test images. The full-run
+settings and runtime estimates are in [HRC-WHU experiment records](../../docs/HRC_WHU.md).

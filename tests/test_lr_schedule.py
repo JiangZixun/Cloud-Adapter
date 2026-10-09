@@ -49,6 +49,69 @@ class LearningRateScheduleTests(unittest.TestCase):
             with self.subTest(override=override), self.assertRaises(ValueError):
                 validate_resume_schedule(saved, dict(saved, **override))
 
+    def test_cafbr_phase_schedule_restarts_at_activation(self):
+        config = dict(max_iters=40000, model="FMamba_CAFBR", cafbr_start_ratio=0.5,
+                      fmamba=dict(skip_refinement=dict(enabled=True)),
+                      lr_schedule="cosine_cafbr_phase", warmup_ratio=0.1,
+                      warmup_start_factor=0.01, min_lr_ratio=0.0)
+        self.assertEqual(warmup_steps(config), 2000)
+        for phase_offset in (0, 20000):
+            for local_step, expected in ((0, 0.01), (1000, 0.505), (2000, 1), (11000, 0.5)):
+                self.assertAlmostEqual(lr_multiplier(phase_offset + local_step, config), expected)
+        self.assertLess(lr_multiplier(19999, config), 1e-7)
+        self.assertAlmostEqual(lr_multiplier(20000, config), 0.01)
+        self.assertEqual(lr_multiplier(40000, config), 0)
+        self.assertEqual(lr_multiplier(40001, config), 0)
+        # A non-even split follows the actual CAFBR boundary, not a hardcoded midpoint.
+        uneven = dict(config, max_iters=30000, cafbr_start_ratio=0.25)
+        self.assertEqual(warmup_steps(uneven), 750)
+        self.assertEqual(lr_multiplier(750, uneven), 1)
+        self.assertAlmostEqual(lr_multiplier(7500, uneven), 0.01)
+        self.assertEqual(lr_multiplier(9750, uneven), 1)
+        self.assertEqual(lr_multiplier(30000, uneven), 0)
+
+    def test_phase_scheduler_optimizer_rates_and_resume_across_boundary(self):
+        config = dict(max_iters=20, model="FMamba_CAFBR", cafbr_start_ratio=0.5,
+                      fmamba=dict(skip_refinement=dict(enabled=True)),
+                      lr_schedule="cosine_cafbr_phase", warmup_ratio=0.1)
+        optimizer = torch.optim.AdamW([torch.nn.Parameter(torch.ones(1))], lr=3e-5)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda step: lr_multiplier(step, config))
+        for _ in range(9):
+            optimizer.step()
+            scheduler.step()
+        optimizer_state, scheduler_state = optimizer.state_dict(), scheduler.state_dict()
+        expected = []
+        for _ in range(11):
+            expected.append(optimizer.param_groups[0]["lr"])
+            optimizer.step()
+            scheduler.step()
+        self.assertAlmostEqual(expected[1], 3e-7)  # update 11: CAFBR's first update
+        self.assertAlmostEqual(expected[2], 3e-5)  # update 12: warmup completed
+        restored = torch.optim.AdamW([torch.nn.Parameter(torch.ones(1))], lr=3e-5)
+        restored_schedule = torch.optim.lr_scheduler.LambdaLR(restored, lambda step: lr_multiplier(step, config))
+        restored.load_state_dict(optimizer_state)
+        restored_schedule.load_state_dict(scheduler_state)
+        actual = []
+        for _ in range(11):
+            actual.append(restored.param_groups[0]["lr"])
+            restored.step()
+            restored_schedule.step()
+        self.assertEqual(actual, expected)
+        for override in (dict(max_iters=30), dict(cafbr_start_ratio=0.25), dict(lr_schedule="cosine")):
+            with self.subTest(override=override), self.assertRaises(ValueError):
+                validate_resume_schedule(config, dict(config, **override))
+
+    def test_phase_schedule_rejects_empty_phases_and_disabled_cafbr(self):
+        config = dict(max_iters=20, model="FMamba_CAFBR", cafbr_start_ratio=0.5,
+                      fmamba=dict(skip_refinement=dict(enabled=True)),
+                      lr_schedule="cosine_cafbr_phase", warmup_ratio=0.1)
+        for override in (dict(cafbr_start_ratio=0), dict(cafbr_start_ratio=1),
+                         dict(cafbr_start_ratio=-0.1), dict(cafbr_start_ratio=float("nan")),
+                         dict(max_iters=1), dict(max_iters=2), dict(warmup_ratio=0.99),
+                         dict(model="UNet"), dict(fmamba=dict(skip_refinement=dict(enabled=False)))):
+            with self.subTest(override=override), self.assertRaises(ValueError):
+                warmup_steps(dict(config, **override))
+
     def test_hrc_baselines_use_cosine_and_other_models_keep_original_poly(self):
         root = Path(__file__).resolve().parents[1]
         json_paths = list((root / "configs").glob("*/hrc_whu*.json"))
