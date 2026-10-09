@@ -74,9 +74,12 @@ class CloudDataset(Dataset):
 class IterationBatchSampler(Sampler):
     """Shuffled infinite sampling reproducible across resume and worker prefetch."""
 
-    def __init__(self, size, batch_size, start_iter, max_iters, seed):
+    def __init__(self, size, batch_size, start_iter, max_iters, seed, rank=0, world_size=1):
         self.size, self.batch_size = size, batch_size
         self.start_iter, self.max_iters, self.seed = start_iter, max_iters, seed
+        if world_size < 1 or not 0 <= rank < world_size:
+            raise ValueError("Invalid sampler rank/world_size")
+        self.rank, self.world_size = rank, world_size
 
     def __len__(self):
         return self.max_iters - self.start_iter
@@ -85,7 +88,9 @@ class IterationBatchSampler(Sampler):
         previous_epoch, order = None, None
         for step in range(self.start_iter, self.max_iters):
             batch = []
-            for position in range(step * self.batch_size, (step + 1) * self.batch_size):
+            global_batch = self.batch_size * self.world_size
+            start = step * global_batch + self.rank * self.batch_size
+            for position in range(start, start + self.batch_size):
                 epoch, offset = divmod(position, self.size)
                 if epoch != previous_epoch:
                     order = torch.randperm(self.size, generator=torch.Generator().manual_seed(self.seed + epoch)).tolist()

@@ -4,12 +4,53 @@ Four configurations provide native and official Mask2Former heads on each datase
 `cloudsen12_l1c_native.json`, `cloudsen12_l1c_mask2former.json`,
 `cloudsen12_l2a_native.json`, and `cloudsen12_l2a_mask2former.json`.
 
-The PNG datasets come from `/mnt/data1/Dataset/Cloud-Adapter/cloudsen12_high_l1c`
-and `cloudsen12_high_l2a`. Each has 8,490 train, 535 val, and 975 test images,
-with matching masks. The entire mask collection was checked: labels are 0–3,
-in order clear / thick cloud / thin cloud / cloud shadow. Images are RGB at
-512x512; palette indices remain intact. The code consumes these RGB PNGs,
-not the original multispectral Sentinel-2 products.
+On the A6000 host, native configurations read PNG datasets from
+`/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l1c` and
+`/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l2a`.
+Images are RGB at 512x512, with palette mask labels 0–3 in order
+clear / thick cloud / thin cloud / cloud shadow.
+
+## A6000 native DDP training
+
+The two native launchers use `/root/anaconda3/envs/qwen3/bin/python` and
+`torch.distributed.run --standalone` with two processes by default, one per GPU.
+This host has two RTX A6000 GPUs, Python 3.11.7, Torch 2.1.2+cu118, and
+mamba-ssm 1.2.0.post1. All branch synchronization uses `A6000`, tracking
+`origin/A6000`.
+
+```bash
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr.sh
+bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr.sh
+
+# Each dataset uses both GPUs; run these jobs sequentially.
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr.sh \
+  --smoke-test --work-dir experiments/CloudSEN12_L1C/FMamba_CAFBR_ddp_smoke
+bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr.sh \
+  --smoke-test --work-dir experiments/CloudSEN12_L2A/FMamba_CAFBR_ddp_smoke
+
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr.sh \
+  --resume experiments/CloudSEN12_L1C/FMamba_CAFBR/checkpoints/last.pth
+
+# Single GPU debugging with the same global batch size.
+NPROC_PER_NODE=1 bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr.sh \
+  --grad-accum-steps 4 --work-dir experiments/CloudSEN12_L1C/FMamba_CAFBR_single_gpu
+```
+
+`PYTHON`, `NPROC_PER_NODE`, and `CUDA_VISIBLE_DEVICES` can override the interpreter,
+process count, and GPU selection. Native defaults are **batch 1 per GPU ×
+accumulation 2 × 2 GPUs = global effective batch 4**. Global batch size is computed
+from the actual process count. Sampling partitions a shared shuffled stream by
+rank, including deterministic augmentation seeds and resume offsets. Accumulated
+micro-batches use `no_sync()` until the final backward. Loss is averaged over both
+ranks. BatchNorm remains local to each GPU; rank-zero buffers are saved.
+
+At the CAFBR phase boundary, the DDP reducer is rebuilt so the newly unfrozen
+refiners participate in gradient synchronization. Only rank zero writes histories,
+curves, W&B, and unwrapped checkpoints, and evaluates the complete original test
+split while the other rank waits. Saved checkpoints retain each rank's CPU/CUDA
+RNG and reject a changed process count or accumulation setting on resume.
+Smoke runs also hash every parameter after each update and fail if ranks diverge;
+training history records `parameter_sync_sha256`.
 
 These runs use only `train` and `test`, as requested. The existing `val` directory
 is unused. Periodic evaluation on all 975 test images supplies loss and all metrics
@@ -18,8 +59,8 @@ on the same test split again. Standalone evaluation also uses `test`. Histories,
 data manifests, environment metadata and plots identify checkpoint selection and
 final testing as separate roles on the same original test split.
 
-Default settings: 512x512 input, physical batch size 1, gradient accumulation 4, effective batch size 4,
-four workers,
+Native DDP settings: 512x512 input, physical batch size 1 per GPU, gradient accumulation 2, global effective batch size 4,
+four workers per rank,
 FP32, 40,000 optimizer steps, AdamW peak lr 1e-4 and weight decay 0.05,
 seed 42, and validation every 2,000 steps (20 evaluations in total). The first
 10% (4,000 optimizer steps) linearly warm up from 1e-6 to 1e-4; the remaining
@@ -27,18 +68,19 @@ seed 42, and validation every 2,000 steps (20 evaluations in total). The first
 `warmup_ratio: 0.1`, `warmup_start_factor: 0.01`, and `min_lr_ratio: 0.0`.
 A checkpoint created with another LR schedule requires a new tuning run; resume
 checks the saved schedule to prevent silently changing its optimization history.
-Batch 1 accommodates the full model at native resolution on the 32 GB RTX 5090 D.
-`grad_accum_steps: 4` averages four micro-batch gradients before each optimizer
-update. `max_iters` and tqdm count optimizer updates, so 40,000 steps consume
-160,000 physical batches/images (about 18.85 passes over the 8,490-image split).
+Native batch 1 accommodates the full model on each 48 GB RTX A6000.
+`grad_accum_steps: 2` averages two micro-batches per rank before each optimizer
+update; DDP averages gradients between ranks. Mask2Former remains single GPU
+with accumulation 4 and its existing host-specific data configuration. `max_iters` and tqdm count optimizer updates, so 40,000 steps consume
+160,000 global physical batches/images (about 18.85 passes over the 8,490-image split).
 Warmup, cosine LR, validation and CAFBR switching all count optimizer updates;
 validation/test themselves continue to use physical batch 1. Loss logging records
-the mean original objective, not the loss divided by four for backward.
+the mean original objective, not the loss divided by the accumulation factor for backward.
 JSON and W&B record effective batch, micro-batch counts and optimizer updates.
 Resume uses `iteration * grad_accum_steps` for sampling and rejects a different
 accumulation factor. Other configurations default to accumulation 1.
-Gradient accumulation matches the reported batch count, but BatchNorm statistics
-still use physical batch 1, so it is not identical to a physical batch of four. `train_loss_only: true` skips training prediction
+Gradient accumulation and DDP match the reported global batch count, but BatchNorm statistics
+still use physical batch 1 per GPU, so it is not identical to a physical batch of four. `train_loss_only: true` skips training prediction
 conversion, confusion matrices and full-train evaluation. Training only computes
 the objective, updates gradients and records window-averaged batch loss and LR.
 The window boundaries and CAFBR state remain traceable in JSON and W&B.
@@ -56,7 +98,7 @@ bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_mask2former.sh --wandb
 bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr.sh --wandb
 bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_mask2former.sh --wandb
 
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/test_fmamba.py \
+/root/anaconda3/envs/qwen3/bin/python tools/test_fmamba.py \
   experiments/CloudSEN12_L1C/FMamba_CAFBR/checkpoints/best.pth
 
 bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr.sh \
@@ -75,25 +117,25 @@ batch training loss as `train/loss` and `optimization/loss`; no training segment
 metrics are calculated. Switching an existing run from the old independent-val
 protocol requires a new work directory, preserving its original checkpoint ranking.
 
-## Smoke tests and timing
+## Smoke tests and historical single-GPU timing
 
 Add `--smoke-test --work-dir <separate-directory>` to any launcher. CloudSEN12
 smoke tests use eight train images and eight test images with the full 512x512
 model; smoke limits are saved into their checkpoints so standalone testing remains
-bounded. These limits are absent from normal training. Four GPU integration tests
+bounded. These limits are absent from normal training. Previous single-GPU integration tests
 verified both datasets/heads in temporary data roots containing only train/test,
 CAFBR activation, loss-only training, test-based selection, top-3/best/last,
-metrics, curves and standalone evaluation. Native L1C additionally verified resume. These checks include batch1 x accumulation4,
+metrics, curves and standalone evaluation. Native L1C additionally verified resume. Those historical checks include batch1 x accumulation4,
 optimizer/scheduler update counts and 16 micro-batches per four-step smoke run.
 The smoke directories and their checkpoints were deleted after testing.
 
-The following benchmark measures the actual CAFBR-off and CAFBR-on stages, plus
+The following single-GPU benchmark measures the actual CAFBR-off and CAFBR-on stages, plus
 evaluation on 64 real test images, and extrapolates the full 975-image test split.
 It includes every periodic test-set evaluation, final best testing and
 checkpoint I/O; recommended ranges add 10–25% for logging and system variation.
 
 ```bash
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/benchmark_cloudsen.py \
+/root/anaconda3/envs/qwen3/bin/python tools/benchmark_cloudsen.py \
   --config configs/fmamba/cloudsen12_l1c_native.json
 ```
 
@@ -101,6 +143,9 @@ Timing reports are saved at `experiments/<Dataset>/<Model>_benchmark_accum4/timi
 for accumulation 4, preserving previous accumulation-1 benchmark reports.
 Temporary benchmark checkpoints are automatically removed. This is a throughput
 estimate, not evidence of final model quality or completed full training.
+
+The timing figures below are historical RTX 5090 D single-GPU measurements,
+not A6000 DDP estimates.
 
 The original throughput reports describe physical batch 1 without accumulation.
 `timing_estimate_train_test.json` retains the previous train/test estimate for that

@@ -21,7 +21,7 @@ scripts/train/
 ```
 
 Each launcher locates the repository root, uses
-`/home/jzx/anaconda3/envs/qwen3/bin/python` directly, and forwards additional CLI
+`/root/anaconda3/envs/qwen3/bin/python` directly, and forwards additional CLI
 arguments to the trainer. It uses the configured GPU and output directory.
 All launchers display tqdm progress. Add `--wandb` for cloud loss/metric curves;
 see [experiment tracking](../../configs/experiment_tracking.md) for the unified
@@ -43,8 +43,11 @@ classification/mask/Dice losses and auxiliary supervision.
 Native LS-Mamba uses 5 x CE + 5 x source-form squared-denominator Dice.
 See [LS-Mamba configuration](../../configs/lsmamba/README.md).
 
-CloudSEN12 launchers use 512x512 RGB, physical batch 1 and accumulation 4
-(effective batch 4), with 40,000 optimizer updates / 160,000 micro-batches.
+CloudSEN12 native launchers default to two A6000 GPUs using torchrun/DDP,
+512x512 RGB, batch 1 per GPU and accumulation 2 (global effective batch 4),
+with 40,000 optimizer updates / 160,000 global micro-batches.
+`NPROC_PER_NODE` and `PYTHON` override process count and interpreter.
+Mask2Former launchers remain single GPU with accumulation 4.
 Validation is every 2,000 optimizer updates; 10% warmup precedes cosine LR. Training
 only records loss and updates gradients; full-train evaluation is disabled.
 Periodic evaluation and best selection use the 975-image `test` split, followed

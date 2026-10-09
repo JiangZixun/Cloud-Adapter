@@ -3,6 +3,9 @@
 import argparse
 import csv
 import json
+import os
+from contextlib import nullcontext
+from datetime import timedelta
 import random
 import sys
 import time
@@ -11,6 +14,8 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch import nn
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -24,6 +29,7 @@ from baselines.model_factory import build_model, prediction_logits, training_los
 from baselines.tracking import ExperimentHistory, WandbTracker, add_wandb_arguments, file_digest
 from baselines.run_directory import prepare_fresh_run
 from baselines.optimization import accumulation_steps, accumulated_update
+from baselines.distributed import verify_parameter_sync
 from baselines.cafbr_schedule import apply_cafbr_schedule, cafbr_start_iteration, restore_cafbr_state
 
 
@@ -127,7 +133,13 @@ def main(default_config=None):
         if value is not None:
             config[name] = str(value) if isinstance(value, Path) else value
     config["grad_accum_steps"] = accumulation_steps(config)
-    config["effective_batch_size"] = config["batch_size"] * config["grad_accum_steps"]
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    rank = int(os.environ.get("RANK", "0"))
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    distributed = world_size > 1
+    primary = rank == 0
+    config["world_size"] = world_size
+    config["effective_batch_size"] = config["batch_size"] * config["grad_accum_steps"] * world_size
     warmup_steps(config)  # Validate the schedule before creating outputs.
     if not np.isfinite(config["lr"]) or config["lr"] <= 0:
         raise ValueError("lr must be finite and positive")
@@ -143,6 +155,13 @@ def main(default_config=None):
     if not directory.is_absolute():
         directory = ROOT / directory
     device = torch.device(config["device"])
+    if distributed:
+        if device.type != "cuda" or config["model"] != "FMamba_CAFBR":
+            raise ValueError("DDP currently supports native FMamba_CAFBR on CUDA")
+        torch.cuda.set_device(local_rank)
+        device = torch.device("cuda", local_rank)
+        # Rank zero evaluates the complete split and writes large checkpoints.
+        dist.init_process_group("nccl", timeout=timedelta(hours=2))
     if config["model"].startswith(("FMamba_CAFBR", "LSMamba")) and device.type != "cuda":
         raise ValueError("Mamba models require CUDA for their selective-scan extension")
     if config["amp"] and device.type != "cuda":
@@ -169,6 +188,8 @@ def main(default_config=None):
             if accumulation_steps(checkpoint["config"]) != config["grad_accum_steps"]:
                 raise ValueError("Checkpoint configuration mismatch: grad_accum_steps; start a new run")
             validate_resume_schedule(checkpoint["config"], config)
+            if checkpoint["config"].get("world_size", 1) != world_size:
+                raise ValueError("Checkpoint configuration mismatch: world_size; start a new run")
         model.load_state_dict(checkpoint["model"])
         restore_cafbr_state(model, checkpoint)
         if args.resume and checkpoint["config"].get("cafbr_start_ratio", 0.0) != config.get("cafbr_start_ratio", 0.0):
@@ -183,22 +204,28 @@ def main(default_config=None):
         test_dataset.split = "evaluation"
         test_loader = DataLoader(test_dataset, batch_size=config["batch_size"],
                                  num_workers=config["num_workers"], pin_memory=device.type == "cuda")
-        metrics = evaluate(model, test_loader, device, config, description="Test")
-        history = ExperimentHistory(directory, config)
-        tracker = WandbTracker(args, history, resume=True)
-        row = history.record("test", checkpoint["iteration"], metrics,
-                             **restore_cafbr_state(model, checkpoint),
-                             checkpoint=str(args.evaluate.resolve()), checkpoint_sha256=file_digest(args.evaluate),
-                             data_split=splits["test"], role="standalone evaluation")
-        history.render()
-        tracker.log("test", row)
-        tracker.finish()
-        print(json.dumps(metrics, indent=2, allow_nan=False))
+        if primary:
+            metrics = evaluate(model, test_loader, device, config, description="Test")
+            history = ExperimentHistory(directory, config)
+            tracker = WandbTracker(args, history, resume=True)
+            row = history.record("test", checkpoint["iteration"], metrics,
+                                 **restore_cafbr_state(model, checkpoint),
+                                 checkpoint=str(args.evaluate.resolve()), checkpoint_sha256=file_digest(args.evaluate),
+                                 data_split=splits["test"], role="standalone evaluation")
+            history.render()
+            tracker.log("test", row)
+            tracker.finish()
+            print(json.dumps(metrics, indent=2, allow_nan=False))
+        if distributed:
+            dist.barrier()
+            dist.destroy_process_group()
         return
-    if not args.resume:
+    if not args.resume and primary:
         archive = prepare_fresh_run(directory)
         if archive is not None:
             print(f"Previous run has no saved checkpoint; preserved its files at {archive}", flush=True)
+    if distributed:
+        dist.barrier()
     if args.resume:
         if args.resume.resolve() != (directory / "checkpoints/last.pth").resolve():
             raise ValueError("Resume from this run's checkpoints/last.pth to preserve ranking/history")
@@ -215,14 +242,14 @@ def main(default_config=None):
     train_loader = DataLoader(
         train_dataset,
         batch_sampler=IterationBatchSampler(len(train_dataset), config["batch_size"], start_iter * config["grad_accum_steps"],
-                                            config["max_iters"] * config["grad_accum_steps"], config["seed"]),
+                                            config["max_iters"] * config["grad_accum_steps"], config["seed"], rank, world_size),
         num_workers=config["num_workers"], pin_memory=device.type == "cuda",
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"])
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, lambda step: lr_multiplier(step, config)
     )
-    scaler = torch.amp.GradScaler("cuda", enabled=config["amp"])
+    scaler = torch.cuda.amp.GradScaler(enabled=config["amp"])
     if checkpoint:
         optimizer.load_state_dict(checkpoint["optimizer"])
         scheduler.load_state_dict(checkpoint["scheduler"])
@@ -234,48 +261,77 @@ def main(default_config=None):
             )
             print(f"Updated LR schedule horizon to {config['max_iters']} iterations", flush=True)
         scaler.load_state_dict(checkpoint["scaler"])
-        torch.set_rng_state(checkpoint["torch_rng"])
-        if device.type == "cuda":
-            torch.cuda.set_rng_state_all(checkpoint["cuda_rng"])
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / "validation").mkdir(exist_ok=True)
-    write_json(directory / "config.json", config)
-    write_json(directory / "environment.json", {
-        "python": sys.version, "executable": sys.executable, "torch": str(torch.__version__),
-        "device": str(device), "gpu": torch.cuda.get_device_name() if device.type == "cuda" else None,
-        "cuda": torch.version.cuda, "model": config["model"],
-        "parameters": sum(parameter.numel() for parameter in model.parameters()),
-        "train_samples": len(train_dataset), "validation_samples": len(val_dataset),
-        "validation_split": splits["validation"], "checkpoint_selection_split": splits["validation"],
-        "test_split": splits["test"],
-        "train_loss_only": True,
-        "physical_batch_size": config["batch_size"],
-        "grad_accum_steps": config["grad_accum_steps"],
-        "effective_batch_size": config["effective_batch_size"],
-        "iteration_unit": "optimizer update",
-    })
-    write_json(directory / "data_manifest.json", {
-        split: [{"image": str(image), "mask": str(mask)} for image, mask in dataset.pairs]
-        for split, dataset in (("train", train_dataset), ("validation", val_dataset),
-                               ("test", CloudDataset(config, splits["test"], config.get("test_limit"))))
-    })
-    manager = CheckpointManager(directory / "checkpoints", config["keep_top_k"], config["selection_metric"])
-    history = ExperimentHistory(directory, config)
-    history.attach_files()
-    tracker = WandbTracker(args, history, resume=bool(args.resume))
+        if distributed:
+            rng = checkpoint["rank_rng"][rank]
+            torch.set_rng_state(rng["torch"])
+            torch.cuda.set_rng_state(rng["cuda"], device)
+        else:
+            torch.set_rng_state(checkpoint["torch_rng"])
+            if device.type == "cuda":
+                torch.cuda.set_rng_state_all(checkpoint["cuda_rng"])
+    if primary:
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "validation").mkdir(exist_ok=True)
+        write_json(directory / "config.json", config)
+        write_json(directory / "environment.json", {
+            "python": sys.version, "executable": sys.executable, "torch": str(torch.__version__),
+            "device": str(device), "gpu": torch.cuda.get_device_name() if device.type == "cuda" else None,
+            "cuda": torch.version.cuda, "model": config["model"],
+            "parameters": sum(parameter.numel() for parameter in model.parameters()),
+            "train_samples": len(train_dataset), "validation_samples": len(val_dataset),
+            "validation_split": splits["validation"], "checkpoint_selection_split": splits["validation"],
+            "test_split": splits["test"],
+            "train_loss_only": True,
+            "physical_batch_size": config["batch_size"],
+            "grad_accum_steps": config["grad_accum_steps"],
+            "effective_batch_size": config["effective_batch_size"],
+            "iteration_unit": "optimizer update",
+            "distributed": distributed, "world_size": world_size, "backend": "nccl" if distributed else None,
+            "gpu_names": [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())],
+        })
+        write_json(directory / "data_manifest.json", {
+            split: [{"image": str(image), "mask": str(mask)} for image, mask in dataset.pairs]
+            for split, dataset in (("train", train_dataset), ("validation", val_dataset),
+                                   ("test", CloudDataset(config, splits["test"], config.get("test_limit"))))
+        })
+        manager = CheckpointManager(directory / "checkpoints", config["keep_top_k"], config["selection_metric"])
+        history = ExperimentHistory(directory, config)
+        history.attach_files()
+        tracker = WandbTracker(args, history, resume=bool(args.resume))
+    if distributed:
+        dist.barrier()
+    training_model = None
+    previous_cafbr_enabled = None
     loss_sum, loss_steps = 0.0, 0
     window_loss, window_steps = 0.0, 0
-    print(f"{device}: train={len(train_dataset)}, validation({splits['validation']})={len(val_dataset)}, batch={config['batch_size']} x accum={config['grad_accum_steps']} (effective={config['effective_batch_size']}), output={directory}", flush=True)
-    with (directory / "train.log").open("a") as log:
+    if primary:
+        print(f"{device}: world_size={world_size}, train={len(train_dataset)}, validation({splits['validation']})={len(val_dataset)}, batch={config['batch_size']} x accum={config['grad_accum_steps']} (effective={config['effective_batch_size']}), output={directory}", flush=True)
+    with ((directory / "train.log").open("a") if primary else nullcontext()) as log:
         train_iterator = iter(train_loader)
         progress = tqdm(range(start_iter + 1, config["max_iters"] + 1), total=config["max_iters"], initial=start_iter,
-                        desc=f"Train {config['model']}", dynamic_ncols=True)
+                        desc=f"Train {config['model']}", dynamic_ncols=True, disable=not primary)
         for iteration in progress:
             model.train()
             cafbr_state = apply_cafbr_schedule(model, config, iteration)
+            if distributed and (training_model is None or previous_cafbr_enabled != cafbr_state.get("cafbr_enabled")):
+                # CAFBR changes requires_grad at the phase boundary. Rebuild the
+                # reducer so newly enabled parameters join gradient all-reduces.
+                training_model = None
+                training_model = DDP(model, device_ids=[local_rank], output_device=local_rank,
+                                     find_unused_parameters=True)
+                previous_cafbr_enabled = cafbr_state.get("cafbr_enabled")
+                if iteration == 1 and not checkpoint:
+                    torch.manual_seed(config["seed"] + rank)
             lr = optimizer.param_groups[0]["lr"]
-            loss_value = accumulated_update(model, train_iterator, optimizer, scaler,
+            loss_value = accumulated_update(training_model if distributed else model, train_iterator, optimizer, scaler,
                                             device, config, training_loss)
+            if distributed:
+                global_loss = torch.tensor(loss_value, device=device, dtype=torch.float64)
+                dist.all_reduce(global_loss)
+                loss_value = global_loss.item() / world_size
+            synchronization_digest = None
+            if distributed and args.smoke_test:
+                synchronization_digest = verify_parameter_sync(model)
             scheduler.step()
             loss_sum += loss_value
             loss_steps += 1
@@ -287,12 +343,13 @@ def main(default_config=None):
             progress.set_postfix(postfix, refresh=False)
             validation_due = iteration % config["val_interval"] == 0 or iteration == config["max_iters"]
             phase_boundary = cafbr_state and iteration == cafbr_state["cafbr_start_iteration"] - 1
-            if iteration % config["log_interval"] == 0 or validation_due or phase_boundary:
+            if primary and (iteration % config["log_interval"] == 0 or validation_due or phase_boundary):
                 row = history.record("training", iteration, dict(loss=window_loss / window_steps, lr=lr),
                                      first_iteration=iteration - window_steps + 1,
-                                     batches=window_steps * config["grad_accum_steps"], optimizer_updates=window_steps,
+                                     batches=window_steps * config["grad_accum_steps"] * world_size, optimizer_updates=window_steps,
                                      samples=window_steps * config["effective_batch_size"],
-                                     micro_batches_completed=iteration * config["grad_accum_steps"],
+                                     micro_batches_completed=iteration * config["grad_accum_steps"] * world_size,
+                                     world_size=world_size, parameter_sync_sha256=synchronization_digest,
                                      grad_accum_steps=config["grad_accum_steps"], effective_batch_size=config["effective_batch_size"],
                                      **cafbr_state,
                                      data_split="train", role="augmented training batches; evolving model weights")
@@ -303,26 +360,42 @@ def main(default_config=None):
                 log.write(message + "\n")
                 log.flush()
             if validation_due:
-                metrics = evaluate(model, val_loader, device, config)
-                append_metrics(directory, iteration, lr, loss_sum / loss_steps, metrics, splits["validation"])
-                checkpoint_path = str(directory / "checkpoints" / f"iter_{iteration:07d}.pth")
-                val_row = history.record("validation", iteration, metrics, data_split=splits["validation"],
-                                         **cafbr_state,
-                                         role="checkpoint selection", checkpoint=checkpoint_path)
-                tracker.log("validation", val_row)
-                history.render()
-                state = dict(iteration=iteration, model=model.state_dict(), optimizer=optimizer.state_dict(),
-                             **cafbr_state,
-                             scheduler=scheduler.state_dict(), scaler=scaler.state_dict(), config=config,
-                             metrics=metrics, torch_rng=torch.get_rng_state(),
-                             cuda_rng=torch.cuda.get_rng_state_all() if device.type == "cuda" else [])
-                manager.update(state, metrics)
-                tracker.update_checkpoints(manager.top, iteration)
-                message = f"validation iter={iteration} loss={metrics['loss']:.6f} " + " ".join(f"{key}={metrics[key]}" for key in METRIC_NAMES)
-                tqdm.write(message)
-                log.write(message + "\n")
-                log.flush()
+                rank_rng = None
+                if distributed:
+                    # Rank-zero BatchNorm buffers are the checkpoint authority.
+                    for buffer in model.buffers():
+                        dist.broadcast(buffer, src=0)
+                    rank_rng = [None] * world_size
+                    dist.all_gather_object(rank_rng, {"torch": torch.get_rng_state(),
+                                                       "cuda": torch.cuda.get_rng_state(device)})
+                if primary:
+                    metrics = evaluate(model, val_loader, device, config)
+                    append_metrics(directory, iteration, lr, loss_sum / loss_steps, metrics, splits["validation"])
+                    checkpoint_path = str(directory / "checkpoints" / f"iter_{iteration:07d}.pth")
+                    val_row = history.record("validation", iteration, metrics, data_split=splits["validation"],
+                                             **cafbr_state,
+                                             role="checkpoint selection", checkpoint=checkpoint_path)
+                    tracker.log("validation", val_row)
+                    history.render()
+                    state = dict(iteration=iteration, model=model.state_dict(), optimizer=optimizer.state_dict(),
+                                 **cafbr_state,
+                                 scheduler=scheduler.state_dict(), scaler=scaler.state_dict(), config=config,
+                                 metrics=metrics, torch_rng=torch.get_rng_state(),
+                                 cuda_rng=torch.cuda.get_rng_state_all() if device.type == "cuda" else [],
+                                 rank_rng=rank_rng)
+                    manager.update(state, metrics)
+                    tracker.update_checkpoints(manager.top, iteration)
+                    message = f"validation iter={iteration} loss={metrics['loss']:.6f} " + " ".join(f"{key}={metrics[key]}" for key in METRIC_NAMES)
+                    tqdm.write(message)
+                    log.write(message + "\n")
+                    log.flush()
+                if distributed:
+                    dist.barrier()
                 loss_sum, loss_steps = 0.0, 0
+    if not primary:
+        dist.barrier()
+        dist.destroy_process_group()
+        return
     best = torch.load(directory / "checkpoints/best.pth", map_location="cpu", weights_only=True)
     model.load_state_dict(best["model"])
     best_cafbr_state = restore_cafbr_state(model, best)
@@ -346,6 +419,10 @@ def main(default_config=None):
     tracker.log("test", test_row)
     tracker.finish()
     print(f"Finished. Best iteration={best['iteration']}, validation mIoU={best['metrics']['mIoU']:.4f}, test mIoU={best_metrics['mIoU']:.4f}", flush=True)
+
+    if distributed:
+        dist.barrier()
+        dist.destroy_process_group()
 
 
 if __name__ == "__main__":

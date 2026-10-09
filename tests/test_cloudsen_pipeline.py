@@ -46,7 +46,9 @@ class CloudSENPipelineTests(unittest.TestCase):
                 self.assertEqual(config['cafbr_start_ratio'], 0.5)
                 self.assertEqual(config['max_iters'], 40000)
                 self.assertEqual(config['batch_size'], 1)
-                self.assertEqual(config['grad_accum_steps'], 4)
+                self.assertEqual(config['grad_accum_steps'], 2 if variant == 'native' else 4)
+                if variant == 'native':
+                    self.assertEqual(config['world_size'], 2)
                 self.assertEqual(config['effective_batch_size'], 4)
                 self.assertEqual(config['val_interval'], 2000)
                 self.assertEqual(config['lr_schedule'], 'cosine')

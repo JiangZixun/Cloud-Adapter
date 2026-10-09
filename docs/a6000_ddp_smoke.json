@@ -1,0 +1,74 @@
+{
+  "branch": "A6000",
+  "python": "/root/anaconda3/envs/qwen3/bin/python",
+  "torch": "2.1.2+cu118",
+  "gpu_names": [
+    "NVIDIA RTX A6000",
+    "NVIDIA RTX A6000"
+  ],
+  "model": "FMamba_CAFBR",
+  "head": "native",
+  "image_size": [
+    512,
+    512
+  ],
+  "world_size": 2,
+  "per_rank_batch_size": 1,
+  "per_rank_grad_accum_steps": 2,
+  "global_effective_batch_size": 4,
+  "full_training_started": false,
+  "datasets": {
+    "L1C": {
+      "output": "experiments/CloudSEN12_L1C/FMamba_CAFBR_ddp_smoke",
+      "training_updates": 6,
+      "train_images": 8,
+      "test_images": 8,
+      "cafbr_off_then_on_verified": true,
+      "cafbr_weights_updated": true,
+      "parameter_sync_verified_at_updates": [
+        6
+      ],
+      "unwrapped_checkpoint": true,
+      "per_rank_rng_saved": true,
+      "top_k": 3,
+      "best_iteration": 4,
+      "smoke_mIoU": 13.35478053037914,
+      "resume_verified": true,
+      "optimizer_update_counts": [
+        6,
+        4
+      ],
+      "standalone_evaluation_verified": false
+    },
+    "L2A": {
+      "output": "experiments/CloudSEN12_L2A/FMamba_CAFBR_ddp_smoke",
+      "training_updates": 5,
+      "train_images": 8,
+      "test_images": 8,
+      "cafbr_off_then_on_verified": true,
+      "cafbr_weights_updated": true,
+      "parameter_sync_verified_at_updates": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "unwrapped_checkpoint": true,
+      "per_rank_rng_saved": true,
+      "top_k": 3,
+      "best_iteration": 4,
+      "smoke_mIoU": 10.805210639126116,
+      "resume_verified": false,
+      "optimizer_update_counts": [
+        5,
+        3
+      ],
+      "standalone_evaluation_verified": true
+    }
+  },
+  "regression_limitations": [
+    "Full suite: LS-Mamba tests fail because timm is missing and torch.amp.custom_fwd is unavailable in torch 2.1.2.",
+    "W&B SDK is not installed; its SDK integration test is skipped."
+  ]
+}

@@ -11,7 +11,7 @@ W&B is opt-in. The selected qwen3 environment includes the SDK. Login once if
 credentials are not already configured, then add `--wandb` to any launcher:
 
 ```bash
-/home/jzx/anaconda3/envs/qwen3/bin/python -m wandb login
+/root/anaconda3/envs/qwen3/bin/python -m wandb login
 bash scripts/train/HRC_WHU/train_unet.sh --wandb
 bash scripts/train/HRC_WHU/train_fmamba_cafbr.sh --wandb
 bash scripts/train/HRC_WHU/train_fmamba_cafbr_mask2former.sh --wandb

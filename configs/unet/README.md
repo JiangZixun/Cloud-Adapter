@@ -10,13 +10,13 @@ its own UNet decoder rather than Mask2Former. This is a simple reproduction base
 not a claim of matching a particular published UNet recipe or paper score.
 
 The standalone trainer needs Python, PyTorch, NumPy, and Pillow; MMSeg/MMCV/MMEngine
-are not required. On this machine the selected `qwen3` environment supports the
-RTX 5090 D; the default Python environment does not support this GPU.
+are not required. On the A6000 host the selected `qwen3` environment uses
+Python 3.11.7 and PyTorch 2.1.2+cu118.
 
 Run from the repository root:
 
 ```bash
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/train_unet.py
+/root/anaconda3/envs/qwen3/bin/python tools/train_unet.py
 ```
 
 Defaults in `hrc_whu.json`: original 120 training images, all 30 test images used
@@ -64,14 +64,14 @@ saved, along with validation loss and the original result's timing fields
 Resume an interrupted run with the same configuration and directory:
 
 ```bash
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/train_unet.py \
+/root/anaconda3/envs/qwen3/bin/python tools/train_unet.py \
   --resume experiments/HRC_WHU/UNet_warmup_cosine/checkpoints/last.pth
 ```
 
 To evaluate a checkpoint separately:
 
 ```bash
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/train_unet.py \
+/root/anaconda3/envs/qwen3/bin/python tools/train_unet.py \
   --evaluate experiments/HRC_WHU/UNet_warmup_cosine/checkpoints/best.pth
 ```
 
@@ -80,8 +80,8 @@ original 256x256 resolution, all 30 test images each validation). Output uses
 `experiments/HRC_WHU/UNet_smoke/` to keep it separate from the full run:
 
 ```bash
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/train_unet.py --smoke-test
-/home/jzx/anaconda3/envs/qwen3/bin/python -m unittest discover -s tests -v
+/root/anaconda3/envs/qwen3/bin/python tools/train_unet.py --smoke-test
+/root/anaconda3/envs/qwen3/bin/python -m unittest discover -s tests -v
 ```
 
 Interrupted runs without any checkpoint or validation/test result are preserved
@@ -96,7 +96,7 @@ the learning-rate schedule horizon; use the original horizon when resuming a ful
 Visualize representative training/test samples through the same dataset loader:
 
 ```bash
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/visualize_hrc_whu.py
+/root/anaconda3/envs/qwen3/bin/python tools/visualize_hrc_whu.py
 ```
 
 Figures and full-split label statistics are saved under

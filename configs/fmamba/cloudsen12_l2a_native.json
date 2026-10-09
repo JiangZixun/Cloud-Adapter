@@ -1,7 +1,7 @@
 {
   "dataset": "CloudSEN12_L2A",
   "model": "FMamba_CAFBR",
-  "data_root": "/mnt/data1/Dataset/Cloud-Adapter/cloudsen12_high_l2a",
+  "data_root": "/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l2a",
   "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR",
   "classes": [
     "clear",
@@ -75,6 +75,7 @@
   "warmup_ratio": 0.1,
   "warmup_start_factor": 0.01,
   "min_lr_ratio": 0.0,
-  "grad_accum_steps": 4,
-  "effective_batch_size": 4
+  "grad_accum_steps": 2,
+  "effective_batch_size": 4,
+  "world_size": 2
 }

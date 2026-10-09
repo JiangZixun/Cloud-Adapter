@@ -8,10 +8,10 @@ local loss/metric curves and opt-in `--wandb` cloud logging. See
 [experiment tracking](../experiment_tracking.md).
 
 Use the existing Conda **qwen3** environment by absolute interpreter path:
-`/home/jzx/anaconda3/envs/qwen3/bin/python`. No `conda activate` is required.
-The machine has no environment literally named `qwen`; `qwen3` is the available
-Qwen environment, with Python 3.12.7, Torch 2.10.0+cu128 and Transformers 4.51.3.
-The real selective-scan CUDA extensions support the RTX 5090 D.
+`/root/anaconda3/envs/qwen3/bin/python`. No `conda activate` is required.
+On the A6000 host, qwen3 provides Python 3.11.7, Torch 2.1.2+cu118, and
+mamba-ssm 1.2.0.post1. The native CloudSEN12 launchers use both RTX A6000 GPUs
+with DDP; see the CloudSEN12 guide above.
 
 ## Model provenance and adaptations
 
@@ -83,19 +83,19 @@ when tested. The midpoint follows `max_iters`, including smoke-test overrides.
 
 ```bash
 # Native head
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
+/root/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
   --config configs/fmamba/hrc_whu_native.json
 
 # Mask2Former head
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
+/root/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
   --config configs/fmamba/hrc_whu_mask2former.json
 
 # Test either variant: its model config is loaded from the checkpoint
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/test_fmamba.py \
+/root/anaconda3/envs/qwen3/bin/python tools/test_fmamba.py \
   experiments/HRC_WHU/FMamba_CAFBR_warmup_cosine/checkpoints/best.pth
 
 # Resume the same experiment
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
+/root/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
   --config configs/fmamba/hrc_whu_native.json \
   --resume experiments/HRC_WHU/FMamba_CAFBR_warmup_cosine/checkpoints/last.pth
 ```
@@ -115,12 +115,12 @@ are preserved. Existing output directories are protected against accidental reus
 ## GPU smoke tests and timing
 
 ```bash
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
+/root/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
   --config configs/fmamba/hrc_whu_native.json --smoke-test
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
+/root/anaconda3/envs/qwen3/bin/python tools/train_fmamba.py \
   --config configs/fmamba/hrc_whu_mask2former.json --smoke-test
-/home/jzx/anaconda3/envs/qwen3/bin/python -m unittest discover -s tests -v
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/benchmark_baseline.py \
+/root/anaconda3/envs/qwen3/bin/python -m unittest discover -s tests -v
+/root/anaconda3/envs/qwen3/bin/python tools/benchmark_baseline.py \
   --config configs/fmamba/hrc_whu_native.json
 ```
 

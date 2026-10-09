@@ -14,7 +14,7 @@ class GradientAccumulationTests(unittest.TestCase):
         reference = copy.deepcopy(model)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
         reference_optimizer = torch.optim.AdamW(reference.parameters(), lr=1e-3)
-        scaler = torch.amp.GradScaler('cuda', enabled=False)
+        scaler = torch.cuda.amp.GradScaler(enabled=False)
         images, targets = torch.randn(8, 3), torch.randn(8, 2)
         iterator = iter([(images[i:i+1], targets[i:i+1]) for i in range(8)])
         objective = lambda model, output, labels, config: torch.nn.functional.mse_loss(output, labels)
@@ -36,6 +36,19 @@ class GradientAccumulationTests(unittest.TestCase):
         resumed = list(IterationBatchSampler(7, 1, 2 * accumulation, 5 * accumulation, 42))
         self.assertEqual(resumed, complete[8:])
         self.assertEqual(len(resumed), 12)
+
+    def test_distributed_sampler_partitions_global_batches_and_resumes(self):
+        reference = list(IterationBatchSampler(17, 6, 0, 8, 42))
+        ranks = [list(IterationBatchSampler(17, 2, 0, 8, 42, rank, 3)) for rank in range(3)]
+        for step, batch in enumerate(reference):
+            self.assertEqual([sample for rank in ranks for sample in rank[step]], batch)
+            self.assertEqual(len({seed for _, seed in batch}), 6)
+        for rank in range(3):
+            resumed = list(IterationBatchSampler(17, 2, 3, 8, 42, rank, 3))
+            self.assertEqual(resumed, ranks[rank][3:])
+        for rank, world_size in ((-1, 2), (2, 2), (0, 0)):
+            with self.assertRaises(ValueError):
+                IterationBatchSampler(17, 2, 0, 8, 42, rank, world_size)
 
     def test_default_and_invalid_accumulation(self):
         self.assertEqual(accumulation_steps({}), 1)

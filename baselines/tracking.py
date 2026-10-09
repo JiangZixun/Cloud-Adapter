@@ -129,7 +129,7 @@ class WandbTracker:
         try:
             import wandb
         except ImportError as error:
-            raise RuntimeError("Install wandb using /home/jzx/anaconda3/envs/qwen3/bin/python -m pip install wandb") from error
+            raise RuntimeError("Install wandb using /root/anaconda3/envs/qwen3/bin/python -m pip install wandb") from error
         previous = history.data.get("wandb")
         run_id = previous["id"] if previous else uuid.uuid4().hex[:8]
         config = history.data["sessions"][-1]["config"]
@@ -137,7 +137,7 @@ class WandbTracker:
         # environment manifests and code provenance in the local JSON only.
         cloud_config = {key: config[key] for key in (
             "dataset", "model", "classes", "image_size", "base_channels", "batch_size",
-            "grad_accum_steps", "effective_batch_size",
+            "grad_accum_steps", "effective_batch_size", "world_size",
             "max_iters", "val_interval", "lr", "weight_decay", "poly_power", "lr_schedule", "min_lr_ratio",
             "warmup_ratio", "warmup_start_factor", "seed", "amp",
             "loss", "fmamba", "lsmamba", "mask2former", "cafbr_start_ratio", "validation_split", "test_split", "train_loss_only"
@@ -177,7 +177,7 @@ class WandbTracker:
         if self.run is None:
             return
         payload = {"iteration": row["iteration"]}
-        for key in ("loss", "ce_loss", "lr", "samples", "batches", "optimizer_updates", "micro_batches_completed", "grad_accum_steps", "effective_batch_size", "cafbr_enabled", "cafbr_start_iteration", *METRIC_NAMES):
+        for key in ("loss", "ce_loss", "lr", "samples", "batches", "optimizer_updates", "micro_batches_completed", "grad_accum_steps", "effective_batch_size", "world_size", "cafbr_enabled", "cafbr_start_iteration", *METRIC_NAMES):
             value = row.get(key)
             if isinstance(value, (int, float)) and math.isfinite(value):
                 payload[f"{split}/{key}"] = value
@@ -201,7 +201,7 @@ class WandbTracker:
         artifact = wandb.Artifact(f"history-{self.history.data['run_id']}", type="metrics")
         fields = ("iteration", "recorded_at", "loss", "ce_loss", "lr", "samples", "batches",
                   "cafbr_enabled", "cafbr_start_iteration", "optimizer_updates",
-                  "micro_batches_completed", "grad_accum_steps", "effective_batch_size",
+                  "micro_batches_completed", "grad_accum_steps", "effective_batch_size", "world_size",
                   "first_iteration", "per_class", "confusion_matrix", *METRIC_NAMES)
         cloud_history = {split: [{key: row[key] for key in fields if key in row}
                                 for row in self.history.data[split]]

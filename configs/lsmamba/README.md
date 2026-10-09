@@ -42,7 +42,7 @@ delayed CAFBR schedule.
 bash scripts/train/HRC_WHU/train_lsmamba.sh --wandb
 bash scripts/train/HRC_WHU/train_lsmamba_mask2former.sh --wandb
 
-/home/jzx/anaconda3/envs/qwen3/bin/python tools/test_lsmamba.py \
+/root/anaconda3/envs/qwen3/bin/python tools/test_lsmamba.py \
   experiments/HRC_WHU/LSMamba_warmup_cosine/checkpoints/best.pth
 
 bash scripts/train/HRC_WHU/train_lsmamba.sh \
