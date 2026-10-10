@@ -331,11 +331,16 @@ def main(default_config=None):
     with ((directory / "train.log").open("a") if primary else nullcontext()) as log:
         train_iterator = iter(train_loader)
         iterations = range(start_iter + 1, config["max_iters"] + 1)
-        progress = tqdm(total=config['max_epochs'], initial=start_iter // config['steps_per_epoch'],
-                        desc=f"Train {config['model']}", unit='epoch', dynamic_ncols=True, disable=not primary) if epoch_training else tqdm(
+        progress = None if epoch_training else tqdm(
                             iterations, total=config['max_iters'], initial=start_iter,
                             desc=f"Train {config['model']}", dynamic_ncols=True, disable=not primary)
         for iteration in (iterations if epoch_training else progress):
+            epoch_fields = epoch_context(iteration, config)
+            if epoch_training and progress is None:
+                progress = tqdm(total=config['steps_per_epoch'],
+                                initial=epoch_fields['step_in_epoch'] - 1,
+                                desc=f"Epoch {epoch_fields['epoch_index']}/{config['max_epochs']} [Train]",
+                                unit='batch', dynamic_ncols=True, disable=not primary)
             model.train()
             cafbr_state = apply_cafbr_schedule(model, config, iteration)
             if distributed and (training_model is None or previous_cafbr_enabled != cafbr_state.get("cafbr_enabled")):
@@ -363,14 +368,15 @@ def main(default_config=None):
             window_loss += loss_value
             window_steps += 1
             postfix = dict(loss=f"{loss_value:.4f}", lr=f"{lr:.3g}")
-            epoch_fields = epoch_context(iteration, config)
             epoch_end = epoch_training and iteration % config['steps_per_epoch'] == 0
-            if epoch_training:
-                postfix.update(epoch=f"{epoch_fields['epoch_index']}/{config['max_epochs']}",
-                               step=f"{epoch_fields['step_in_epoch']}/{config['steps_per_epoch']}")
             if cafbr_state:
                 postfix["CAFBR"] = "on" if cafbr_state["cafbr_enabled"] else "off"
             progress.set_postfix(postfix, refresh=False)
+            if epoch_training:
+                progress.update(1)
+                if epoch_end:
+                    progress.close()
+                    progress = None
             validation_due = iteration % config["val_interval"] == 0 or iteration == config["max_iters"]
             phase_boundary = cafbr_state and iteration == cafbr_state["cafbr_start_iteration"] - 1
             if primary and (iteration % config["log_interval"] == 0 or validation_due or phase_boundary):
@@ -400,7 +406,11 @@ def main(default_config=None):
                     dist.all_gather_object(rank_rng, {"torch": torch.get_rng_state(),
                                                        "cuda": torch.cuda.get_rng_state(device)})
                 if primary:
-                    metrics = evaluate(model, val_loader, device, config)
+                    evaluation_description = (
+                        f"Epoch {epoch_fields['epoch_index']}/{config['max_epochs']} "
+                        f"[{'Test' if splits['validation'] == splits['test'] else 'Validation'}]"
+                        if epoch_training else 'Validation')
+                    metrics = evaluate(model, val_loader, device, config, description=evaluation_description)
                     append_metrics(directory, iteration, lr, loss_sum / loss_steps, metrics, splits["validation"], **epoch_fields)
                     checkpoint_path = str(directory / "checkpoints" / f"iter_{iteration:07d}.pth")
                     val_row = history.record("validation", iteration, metrics, data_split=splits["validation"],
@@ -416,7 +426,8 @@ def main(default_config=None):
                             epoch_test.split = 'evaluation'
                             epoch_test_loader = DataLoader(epoch_test, batch_size=config['batch_size'],
                                                            num_workers=config['num_workers'], pin_memory=device.type == 'cuda')
-                            test_metrics = evaluate(model, epoch_test_loader, device, config, description='Epoch test')
+                            test_metrics = evaluate(model, epoch_test_loader, device, config,
+                                                    description=f"Epoch {epoch_fields['epoch_index']}/{config['max_epochs']} [Test]")
                         epoch_test_row = history.record('test', iteration, test_metrics, **epoch_fields, **cafbr_state,
                                                         data_split=splits['test'], role='epoch-end test', checkpoint=checkpoint_path)
                         tracker.log('test', epoch_test_row)
@@ -430,16 +441,21 @@ def main(default_config=None):
                                  rank_rng=rank_rng)
                     manager.update(state, metrics)
                     tracker.update_checkpoints(manager.top, iteration)
-                    message = (f"epoch={epoch_fields['epoch']:g} " if epoch_training else '') + f"validation iter={iteration} loss={metrics['loss']:.6f} " + " ".join(f"{key}={metrics[key]}" for key in METRIC_NAMES)
+                    if epoch_training:
+                        message = (f"Epoch {epoch_fields['epoch_index']}/{config['max_epochs']} "
+                                   f"Test: loss={test_metrics['loss']:.6f} " + ' '.join(
+                                       f"{key}={test_metrics[key]:.4f}" if test_metrics[key] is not None else f"{key}=N/A"
+                                       for key in METRIC_NAMES))
+                    else:
+                        message = f"validation iter={iteration} loss={metrics['loss']:.6f} " + " ".join(f"{key}={metrics[key]}" for key in METRIC_NAMES)
                     tqdm.write(message)
                     log.write(message + "\n")
                     log.flush()
                 if distributed:
                     dist.barrier()
                 loss_sum, loss_steps = 0.0, 0
-            if epoch_end:
-                progress.update(1)
-        progress.close()
+        if progress is not None:
+            progress.close()
     if not primary:
         dist.barrier()
         dist.destroy_process_group()

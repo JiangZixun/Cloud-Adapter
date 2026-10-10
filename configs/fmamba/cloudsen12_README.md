@@ -301,6 +301,10 @@ testing after every epoch. Their output directories end in `_b4_e30`.
 On two GPUs each epoch has 1062 updates, for 31860 updates in total.
 The existing 10% warmup now spans epochs 1-3; CAFBR is enabled from epoch 16
 with the existing 50% activation schedule. Other variant configs retain 20 epochs.
+All epoch-mode variants show a separate `Epoch n/total [Train]` tqdm bar counting
+batches within the current epoch (1062 for two GPUs). It completes before the
+`Epoch n/total [Test]` bar starts. Each epoch ends with a printed test loss,
+aAcc, mIoU, mAcc, mDice, mFscore, mPrecision and mRecall summary.
 
 ## Previous 20-epoch configuration and timing estimates
 
