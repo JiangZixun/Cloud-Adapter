@@ -197,8 +197,8 @@ Mamba state size remains 16. All six new configurations use four SCGM groups.
 The input remains RGB: a learned 1x1 convolution maps 3 input channels to 4
 feature channels before SCGM; each group outputs one channel, concatenated into
 4 channels for the first encoder convolution. Newly projected SCGM groups use
-LeakyReLU (negative slope 0.01) at their outputs to retain gradients for negative
-single-channel responses; the old unprojected groups retain ReLU. This does not add a measured
+SiLU at their outputs (`fmamba.scgm_output_activation="silu"`) to retain
+negative responses smoothly; the old unprojected groups retain ReLU. This does not add a measured
 spectral band. Divisible inputs (including the old RGB/3-group configs) use an
 identity projection and retain their original checkpoint structure.
 
@@ -211,9 +211,12 @@ Four-class parameter counts: base 16 = 4,199,766 (93.41% fewer than the original
 translate directly into the same runtime or activation-memory reduction.
 
 `start_train.sh` runs base16 L1C/L2A, then base32 L1C/L2A, then base64 L1C/L2A
-sequentially using both GPUs and `--wandb`. Each configuration has its own experiment directory ending in `_scgm4`.
+sequentially using both GPUs and `--wandb`. Each configuration has its own experiment directory ending in `_scgm4_silu`.
 The four-group variants require fresh training; prior three-group checkpoints
 are structurally incompatible with the RGB projection and new grouping.
+The SiLU variant uses a fresh directory to keep earlier LeakyReLU experiments
+separate. Configurations saved without `scgm_output_activation` retain the
+previous activation behavior for checkpoint evaluation/resume.
 
 ```bash
 bash start_train.sh
@@ -234,7 +237,9 @@ and checkpoint for evaluation/resume. Five-downsample variants use the native
 head; the current Mask2Former pyramid requires four downsampling operations.
 
 Architecture/gradient checks are in `tests/test_fmamba_scaling.py`; real-data
-512x512 two-GPU four-group smoke results are in `docs/fmamba_scgm4_ddp_smoke.json`.
-Earlier three-group smoke results are preserved in `docs/fmamba_scaled_ddp_smoke.json`. Smoke
+512x512 two-GPU SiLU smoke results (base64 on both datasets) are in
+`docs/fmamba_scgm4_silu_ddp_smoke.json`.
+Earlier LeakyReLU four-group smoke results are preserved in
+`docs/fmamba_scgm4_ddp_smoke.json`. Earlier three-group smoke results are preserved in `docs/fmamba_scaled_ddp_smoke.json`. Smoke
 runs cover the CAFBR off/on transition, exact parameter synchronization after
 every optimizer step, validation, checkpoint saving and best-checkpoint testing.

@@ -16,6 +16,7 @@ def native_model(config):
         skip_refinement=config["fmamba"]["skip_refinement"],
         base_channels=config.get("base_channels", 64),
         downsample_stages=config["fmamba"].get("downsample_stages", 4),
+        scgm_output_activation=config["fmamba"].get("scgm_output_activation"),
     )
 
 

@@ -39,6 +39,8 @@ class FMambaScalingTests(unittest.TestCase):
                 self.assertEqual(model.channelGroup1.in_channels, 4)
                 self.assertEqual(len(model.channelGroup1.group_modules), 4)
                 self.assertEqual(model.stage_1[0].in_channels, 4)
+                self.assertTrue(all(isinstance(group[-1], torch.nn.SiLU)
+                                    for group in model.channelGroup1.group_modules))
                 self.assertEqual(sum(isinstance(m, torch.nn.ConvTranspose2d)
                                      for m in model.modules()), 5)
                 self.assertEqual(model.stage_1[0].stride, (2, 2))

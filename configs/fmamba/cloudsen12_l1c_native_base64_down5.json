@@ -2,7 +2,7 @@
   "dataset": "CloudSEN12_L1C",
   "model": "FMamba_CAFBR",
   "data_root": "/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l1c",
-  "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base64_down5_scgm4",
+  "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base64_down5_scgm4_silu",
   "classes": [
     "clear",
     "thick cloud",
@@ -65,7 +65,8 @@
       ],
       "spectral_reduction": 4
     },
-    "downsample_stages": 5
+    "downsample_stages": 5,
+    "scgm_output_activation": "silu"
   },
   "validation_split": "test",
   "test_split": "test",

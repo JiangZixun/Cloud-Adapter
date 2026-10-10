@@ -1,0 +1,310 @@
+{
+  "architecture": "RGB 3->4 learned 1x1 projection; SCGM four groups, SiLU output, one output channel each; five down/up-sampling operations",
+  "runs": [
+    {
+      "dataset": "CloudSEN12_L1C",
+      "base_channels": 64,
+      "parameters": 64057038,
+      "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base64_down5_scgm4_silu_ddp_smoke",
+      "elapsed_seconds": 47.14,
+      "status": "passed",
+      "environment": {
+        "python": "3.11.7 (main, Dec 15 2023, 18:12:31) [GCC 11.2.0]",
+        "executable": "/root/anaconda3/envs/qwen3/bin/python",
+        "torch": "2.1.2+cu118",
+        "device": "cuda:0",
+        "gpu": "NVIDIA RTX A6000",
+        "cuda": "11.8",
+        "model": "FMamba_CAFBR",
+        "parameters": 64057038,
+        "train_samples": 8,
+        "validation_samples": 8,
+        "validation_split": "test",
+        "checkpoint_selection_split": "test",
+        "test_split": "test",
+        "train_loss_only": true,
+        "physical_batch_size": 1,
+        "grad_accum_steps": 2,
+        "effective_batch_size": 4,
+        "iteration_unit": "optimizer update",
+        "distributed": true,
+        "world_size": 2,
+        "backend": "nccl",
+        "gpu_names": [
+          "NVIDIA RTX A6000",
+          "NVIDIA RTX A6000"
+        ]
+      },
+      "training": [
+        {
+          "iteration": 1,
+          "loss": 11.990097999572754,
+          "cafbr_enabled": false,
+          "parameter_sync_sha256": "69d7e7c0ed9e9c57ee3dcf28fc6136f3740b8d66b379c99dce9e45b0dac4a58b"
+        },
+        {
+          "iteration": 2,
+          "loss": 12.264600038528442,
+          "cafbr_enabled": false,
+          "parameter_sync_sha256": "645c1e3ab1d90dc01ede716a1c0b31c0aae0108db33057798a0134a64204441e"
+        },
+        {
+          "iteration": 3,
+          "loss": 11.708268165588379,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "e4a1a44e609961be46f48ecf2990990380b56455ca23a4aeaa0f46354e4c4d4b"
+        },
+        {
+          "iteration": 4,
+          "loss": 11.409570217132568,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "26bf0db9f741134a435294f1e73fd155cd9ec3170d4e557493fba2ae240ce837"
+        },
+        {
+          "iteration": 5,
+          "loss": 11.230411767959595,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "c3efc47f7997b6751872b0f90053914d8a3a922521b131c1d660d8929da82d1f"
+        }
+      ],
+      "validation_checks": 5,
+      "best_checkpoint_test": {
+        "iteration": 1,
+        "recorded_at": "2026-10-10T06:18:52.773202+00:00",
+        "aAcc": 19.080162048339844,
+        "mIoU": 4.779592897375555,
+        "mAcc": 25.00024015225653,
+        "mDice": 8.025088467218108,
+        "mFscore": 16.050176934436216,
+        "mPrecision": 29.779352745119027,
+        "mRecall": 25.00024015225653,
+        "per_class": {
+          "clear": {
+            "IoU": 0.0009606090261225617,
+            "Acc": 0.0009606090261225617,
+            "Dice": 0.0019211995970283846,
+            "Fscore": 0.0019211995970283846,
+            "Precision": 100.0,
+            "Recall": 0.0009606090261225617
+          },
+          "thick cloud": {
+            "IoU": 0.0,
+            "Acc": 0.0,
+            "Dice": 0.0,
+            "Fscore": null,
+            "Precision": 0.0,
+            "Recall": 0.0
+          },
+          "thin cloud": {
+            "IoU": 0.0,
+            "Acc": 0.0,
+            "Dice": 0.0,
+            "Fscore": null,
+            "Precision": 0.0,
+            "Recall": 0.0
+          },
+          "cloud shadow": {
+            "IoU": 19.117410980476095,
+            "Acc": 100.0,
+            "Dice": 32.098432669275404,
+            "Fscore": 32.098432669275404,
+            "Precision": 19.117410980476095,
+            "Recall": 100.0
+          }
+        },
+        "confusion_matrix": [
+          [
+            8,
+            4104,
+            16,
+            828677
+          ],
+          [
+            0,
+            0,
+            0,
+            581724
+          ],
+          [
+            0,
+            0,
+            0,
+            282491
+          ],
+          [
+            0,
+            0,
+            0,
+            400132
+          ]
+        ],
+        "val_loss": 1.387521669268608,
+        "ce_loss": 1.387521669268608,
+        "loss": 11.077580332756042,
+        "samples": 8,
+        "data_time": 0.02215477474965155,
+        "time": 0.1293885778868571,
+        "data_split": "test",
+        "cafbr_enabled": false,
+        "cafbr_start_iteration": 3,
+        "role": "final best checkpoint evaluation",
+        "checkpoint": "checkpoints/best.pth",
+        "checkpoint_sha256": "88113936be292a8892125d2d1569ddc71ffeb9c848fd0e45344791019340f1d9"
+      },
+      "results_path": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base64_down5_scgm4_silu_ddp_smoke/results.json"
+    },
+    {
+      "dataset": "CloudSEN12_L2A",
+      "base_channels": 64,
+      "parameters": 64057038,
+      "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base64_down5_scgm4_silu_ddp_smoke",
+      "elapsed_seconds": 47.02,
+      "status": "passed",
+      "environment": {
+        "python": "3.11.7 (main, Dec 15 2023, 18:12:31) [GCC 11.2.0]",
+        "executable": "/root/anaconda3/envs/qwen3/bin/python",
+        "torch": "2.1.2+cu118",
+        "device": "cuda:0",
+        "gpu": "NVIDIA RTX A6000",
+        "cuda": "11.8",
+        "model": "FMamba_CAFBR",
+        "parameters": 64057038,
+        "train_samples": 8,
+        "validation_samples": 8,
+        "validation_split": "test",
+        "checkpoint_selection_split": "test",
+        "test_split": "test",
+        "train_loss_only": true,
+        "physical_batch_size": 1,
+        "grad_accum_steps": 2,
+        "effective_batch_size": 4,
+        "iteration_unit": "optimizer update",
+        "distributed": true,
+        "world_size": 2,
+        "backend": "nccl",
+        "gpu_names": [
+          "NVIDIA RTX A6000",
+          "NVIDIA RTX A6000"
+        ]
+      },
+      "training": [
+        {
+          "iteration": 1,
+          "loss": 11.987926721572876,
+          "cafbr_enabled": false,
+          "parameter_sync_sha256": "aecfc6190f09fe1f7caf65a35b1997c1f092c02677eb5c91b99f689e7109241f"
+        },
+        {
+          "iteration": 2,
+          "loss": 12.249329805374146,
+          "cafbr_enabled": false,
+          "parameter_sync_sha256": "2b5557de93151f3037c4534862f6475be52dfa3cca26c0b2ce0a06dee02e272f"
+        },
+        {
+          "iteration": 3,
+          "loss": 11.720342874526978,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "e6922960a707b3d6a9c3a1b53ebf979031716049cf67c845f90c38628f7cc224"
+        },
+        {
+          "iteration": 4,
+          "loss": 11.41012716293335,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "424547d34b16d5df06c28ad0df50da7bf1e02f55587713e762d47fd8b252b97d"
+        },
+        {
+          "iteration": 5,
+          "loss": 11.234185934066772,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "672c669884931a5637ab4516cbf434538458533e83ab53442011bcbd2802776e"
+        }
+      ],
+      "validation_checks": 5,
+      "best_checkpoint_test": {
+        "iteration": 1,
+        "recorded_at": "2026-10-10T06:19:41.007307+00:00",
+        "aAcc": 19.080162048339844,
+        "mIoU": 4.779592897375555,
+        "mAcc": 25.00024015225653,
+        "mDice": 8.025088467218108,
+        "mFscore": 16.050176934436216,
+        "mPrecision": 29.779352745119027,
+        "mRecall": 25.00024015225653,
+        "per_class": {
+          "clear": {
+            "IoU": 0.0009606090261225617,
+            "Acc": 0.0009606090261225617,
+            "Dice": 0.0019211995970283846,
+            "Fscore": 0.0019211995970283846,
+            "Precision": 100.0,
+            "Recall": 0.0009606090261225617
+          },
+          "thick cloud": {
+            "IoU": 0.0,
+            "Acc": 0.0,
+            "Dice": 0.0,
+            "Fscore": null,
+            "Precision": 0.0,
+            "Recall": 0.0
+          },
+          "thin cloud": {
+            "IoU": 0.0,
+            "Acc": 0.0,
+            "Dice": 0.0,
+            "Fscore": null,
+            "Precision": 0.0,
+            "Recall": 0.0
+          },
+          "cloud shadow": {
+            "IoU": 19.117410980476095,
+            "Acc": 100.0,
+            "Dice": 32.098432669275404,
+            "Fscore": 32.098432669275404,
+            "Precision": 19.117410980476095,
+            "Recall": 100.0
+          }
+        },
+        "confusion_matrix": [
+          [
+            8,
+            4104,
+            16,
+            828677
+          ],
+          [
+            0,
+            0,
+            0,
+            581724
+          ],
+          [
+            0,
+            0,
+            0,
+            282491
+          ],
+          [
+            0,
+            0,
+            0,
+            400132
+          ]
+        ],
+        "val_loss": 1.387566477060318,
+        "ce_loss": 1.387566477060318,
+        "loss": 11.077836155891418,
+        "samples": 8,
+        "data_time": 0.023585096292663366,
+        "time": 0.13154466135893017,
+        "data_split": "test",
+        "cafbr_enabled": false,
+        "cafbr_start_iteration": 3,
+        "role": "final best checkpoint evaluation",
+        "checkpoint": "checkpoints/best.pth",
+        "checkpoint_sha256": "dc1df672f57df732ecd9ea739fc7edca01d1e921300742d2ad6cf3c2e9ecc377"
+      },
+      "results_path": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base64_down5_scgm4_silu_ddp_smoke/results.json"
+    }
+  ],
+  "unit_tests": "12 related tests passed, including all three widths at 512x512 with RGB projection and group gradients, and original checkpoint compatibility"
+}

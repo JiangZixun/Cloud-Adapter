@@ -1273,7 +1273,7 @@ class CloudAdaptiveFrequencyBoundaryRefinement(nn.Module):
 
 class DynamicChannelGrouping(nn.Module):
     def __init__(self, in_channels, num_groups, embed_dim=16, group_out_channels=None, return_groups=False,
-                 negative_slope=0.0):
+                 negative_slope=0.0, output_activation=None):
         """
         :param in_channels: 输入通道数
         :param num_groups: 分组数量
@@ -1286,6 +1286,16 @@ class DynamicChannelGrouping(nn.Module):
         self.num_groups = num_groups
         self.embed_dim = embed_dim
         self.return_groups = return_groups
+        self.output_activation = output_activation or ("leaky_relu" if negative_slope > 0 else "relu")
+        if self.output_activation not in {"relu", "leaky_relu", "silu"}:
+            raise ValueError(f"Unsupported SCGM output activation: {self.output_activation}")
+
+        def make_output_activation():
+            if self.output_activation == "silu":
+                return nn.SiLU(inplace=True)
+            if self.output_activation == "leaky_relu":
+                return nn.LeakyReLU(negative_slope, inplace=True)
+            return nn.ReLU(inplace=True)
 
         # 自动设置输出通道数，保证输出通道数保持为 C
         self.group_out_channels = group_out_channels or (in_channels // num_groups)
@@ -1307,9 +1317,7 @@ class DynamicChannelGrouping(nn.Module):
                 nn.BatchNorm2d(in_channels),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(in_channels, self.group_out_channels, kernel_size=1),
-                # Single-channel learned groups must retain gradients even
-                # when the entire pointwise response starts negative.
-                nn.LeakyReLU(negative_slope, inplace=True) if negative_slope > 0 else nn.ReLU(inplace=True)
+                make_output_activation()
             )
             for _ in range(num_groups)
         ])
@@ -1424,6 +1432,7 @@ class Fmamba(nn.Module):
         skip_refinement=None,
         base_channels=64,
         downsample_stages=4,
+        scgm_output_activation=None,
     ):
         super(Fmamba, self).__init__()
         if base_channels not in (16, 32, 64):
@@ -1638,7 +1647,8 @@ class Fmamba(nn.Module):
                                 nn.Conv2d(in_channels, self.scgm_channels, kernel_size=1))
         self.channelGroup1 = DynamicChannelGrouping(
             in_channels=self.scgm_channels, num_groups=channel_groups,
-            negative_slope=0.01 if self.scgm_channels != in_channels else 0.0)
+            negative_slope=0.01 if self.scgm_channels != in_channels else 0.0,
+            output_activation=scgm_output_activation)
 
     def set_skip_refinement_active(self, active):
         self.skip_refinement_active = bool(active)
