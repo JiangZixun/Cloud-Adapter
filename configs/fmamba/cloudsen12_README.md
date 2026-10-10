@@ -293,6 +293,32 @@ for those historical measurements ended in `_scgm4_silu_b4`. Current
 ```
 
 
+## L1C original 40,000-step model with RGB min-max normalization
+
+`cloudsen12_l1c_native_minmax_40k.json` derives from the original L1C config.
+It uses fixed uint8 RGB bounds: `(x - 0) / (255 - 0)`, implemented by
+`mean=[0,0,0]` and `std=[255,255,255]` in the existing data pipeline.
+Training augmentation runs before normalization; train and test use the same
+fixed bounds. This does not independently stretch each image's observed range.
+
+Only input normalization and the experiment output directory change. The model
+retains base64, four downsampling stages, SCGM3/ReLU, 40,000 optimizer updates,
+batch1/GPU with accumulation2, and test-based checkpoint selection every 2000
+updates. AdamW, warmup/cosine and the CAFBR activation schedule are unchanged.
+Outputs use `experiments/CloudSEN12_L1C/FMamba_CAFBR_minmax_40k`.
+The launcher enables W&B by default:
+
+```bash
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_minmax_40k.sh
+```
+
+This is a fresh normalization experiment, so train from initialization instead
+of resuming the original standardized-input checkpoint. `start_train.sh` still
+runs the previously selected L1C base16/base32 30-epoch experiments.
+Real-data checks covered 16 train and 16 test RGB images with normalized values
+in [0,1]. A two-GPU smoke passed five synchronized updates, both CAFBR phases,
+validation/final-best testing and offline W&B logging.
+
 ## Current entrypoint: L1C base16/base32, 30 epochs
 
 `start_train.sh` runs only L1C base16 and base32 sequentially with `--wandb`.
