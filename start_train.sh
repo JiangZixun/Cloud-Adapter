@@ -18,7 +18,7 @@ cd "$PROJECT_ROOT"
 # bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr.sh --wandb
 # bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr.sh --wandb
 
-# Five down/up-sampling stages, four SCGM groups with SiLU; both GPUs and W&B enabled.
+# Five down/up-sampling stages, four SCGM groups with SiLU; batch4/GPU, no accumulation, W&B.
 bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base16_down5.sh --wandb
 bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base16_down5.sh --wandb
 bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base32_down5.sh --wandb

@@ -203,7 +203,10 @@ spectral band. Divisible inputs (including the old RGB/3-group configs) use an
 identity projection and retain their original checkpoint structure.
 
 The existing CAFBR activation schedule, loss,
-optimizer, LR schedule and effective batch size of four are retained.
+optimizer and LR schedule are retained. Each GPU now uses physical batch size
+4 with `grad_accum_steps=1`; on two GPUs the effective batch size is 8.
+40,000 optimizer updates therefore process 320,000 training samples, including
+repeated visits to the dataset.
 
 Four-class parameter counts: base 16 = 4,199,766 (93.41% fewer than the original
 63,768,409); base 32 = 16,260,830 (74.50% fewer); base 64 = 64,057,038
@@ -211,7 +214,7 @@ Four-class parameter counts: base 16 = 4,199,766 (93.41% fewer than the original
 translate directly into the same runtime or activation-memory reduction.
 
 `start_train.sh` runs base16 L1C/L2A, then base32 L1C/L2A, then base64 L1C/L2A
-sequentially using both GPUs and `--wandb`. Each configuration has its own experiment directory ending in `_scgm4_silu`.
+sequentially using both GPUs and `--wandb`. Each configuration has its own experiment directory ending in `_scgm4_silu_b4`.
 The four-group variants require fresh training; prior three-group checkpoints
 are structurally incompatible with the RGB projection and new grouping.
 The SiLU variant uses a fresh directory to keep earlier LeakyReLU experiments
@@ -243,3 +246,44 @@ Earlier LeakyReLU four-group smoke results are preserved in
 `docs/fmamba_scgm4_ddp_smoke.json`. Earlier three-group smoke results are preserved in `docs/fmamba_scaled_ddp_smoke.json`. Smoke
 runs cover the CAFBR off/on transition, exact parameter synchronization after
 every optimizer step, validation, checkpoint saving and best-checkpoint testing.
+
+
+## A6000 DDP batch4 timing (2026-10-10)
+
+All six scaled SCGM4/SiLU configurations now use batch4 per GPU and accumulation1
+(effective batch8 across two RTX A6000 48GB GPUs). All six passed real-data DDP
+training in both CAFBR phases, finite-loss checks, exact phase-end parameter
+synchronization, validation and checkpoint save/reload. Training remains FP32
+with 512x512 inputs and 40,000 optimizer updates.
+
+| Base | Dataset | CAFBR off/on seconds per update | Peak allocated GiB/GPU | Measured full-run estimate (hours) | Suggested budget (hours) |
+|---|---|---:|---:|---:|---:|
+| 16 | CloudSEN12_L1C | 0.605 / 0.647 | 11.52 | 7.30–7.31 | 8.0–9.1 |
+| 16 | CloudSEN12_L2A | 0.608 / 0.653 | 11.52 | 7.37–7.37 | 8.1–9.2 |
+| 32 | CloudSEN12_L1C | 1.122 / 1.193 | 20.77 | 13.35–13.35 | 14.7–16.7 |
+| 32 | CloudSEN12_L2A | 1.123 / 1.186 | 20.77 | 13.32–13.32 | 14.7–16.7 |
+| 64 | CloudSEN12_L1C | 1.982 / 2.100 | 40.00 | 23.54–23.54 | 25.9–29.4 |
+| 64 | CloudSEN12_L2A | 2.011 / 2.109 | 40.00 | 23.76–23.76 | 26.1–29.7 |
+
+Measurements use 3 warmup updates and 12 timed updates per phase on each
+configuration, excluding parameter hashing from update timings. Full-run
+estimates include 20 full 975-image evaluations, one final best evaluation, and
+worst-case new-best checkpoint saves. Evaluation is measured on 40 real images
+and extrapolated by batch count. Suggested budgets include 10–25% for W&B,
+system load and data variation. These are short-run estimates, not completed
+training results. A separate formal-trainer base64 L2A smoke also passed
+CAFBR off/on, every-update synchronization, five optimizer updates (ten total
+rank batches), and final best-checkpoint testing with accumulation1.
+Peak allocated memory differs from CUDA reserved memory;
+base64 reserved about 43.1 GiB per card during training.
+
+All six jobs sequentially: approximately 97.5–110.8 hours (4.1–4.6 days).
+
+Results: `docs/fmamba_batch4_timing.json`. Formal training output directories
+end in `_scgm4_silu_b4` to preserve prior batch/accumulation experiments.
+
+```bash
+/root/anaconda3/envs/qwen3/bin/python -m torch.distributed.run \
+  --standalone --nnodes=1 --nproc_per_node=2 tools/benchmark_fmamba_ddp.py \
+  --config configs/fmamba/cloudsen12_l1c_native_base64_down5.json
+```

@@ -1,0 +1,1489 @@
+{
+  "runs": [
+    {
+      "status": "passed",
+      "config": {
+        "dataset": "CloudSEN12_L1C",
+        "model": "FMamba_CAFBR",
+        "data_root": "/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l1c",
+        "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base16_down5_scgm4_silu_b4",
+        "classes": [
+          "clear",
+          "thick cloud",
+          "thin cloud",
+          "cloud shadow"
+        ],
+        "image_size": [
+          512,
+          512
+        ],
+        "mean": [
+          123.675,
+          116.28,
+          103.53
+        ],
+        "std": [
+          58.395,
+          57.12,
+          57.375
+        ],
+        "base_channels": 16,
+        "batch_size": 4,
+        "num_workers": 4,
+        "max_iters": 40000,
+        "cafbr_start_ratio": 0.5,
+        "val_interval": 2000,
+        "log_interval": 50,
+        "lr": 0.0001,
+        "weight_decay": 0.05,
+        "poly_power": 0.9,
+        "seed": 42,
+        "device": "cuda",
+        "amp": false,
+        "keep_top_k": 3,
+        "selection_metric": "mIoU",
+        "ignore_index": 255,
+        "loss": {
+          "ce_weight": 5.0,
+          "dice_weight": 5.0,
+          "dice_eps": 1e-05
+        },
+        "fmamba": {
+          "scgm_num_groups": 4,
+          "skip_refinement": {
+            "enabled": true,
+            "type": "cloud_adaptive_frequency_boundary",
+            "reduction": 8,
+            "spatial_kernel": 7,
+            "detail_kernel": 3,
+            "gate_bias": 0.0,
+            "gate_scale_init": 1.0,
+            "detail_scale_init": 0.1,
+            "context_scale_init": 0.05,
+            "spectral_scale_init": 0.05,
+            "use_fourier": true,
+            "fourier_stages": [
+              "stage_4",
+              "stage_3",
+              "stage_2"
+            ],
+            "spectral_reduction": 4
+          },
+          "downsample_stages": 5,
+          "scgm_output_activation": "silu"
+        },
+        "validation_split": "test",
+        "test_split": "test",
+        "smoke_val_limit": 8,
+        "smoke_test_limit": 8,
+        "train_loss_only": true,
+        "lr_schedule": "cosine",
+        "warmup_ratio": 0.1,
+        "warmup_start_factor": 0.01,
+        "min_lr_ratio": 0.0,
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "world_size": 2
+      },
+      "python": "/root/anaconda3/envs/qwen3/bin/python",
+      "torch": "2.1.2+cu118",
+      "gpu_names": [
+        "NVIDIA RTX A6000",
+        "NVIDIA RTX A6000"
+      ],
+      "parameters": 4199766,
+      "train_samples": 8490,
+      "warmup_updates_per_phase": 3,
+      "phases": {
+        "off": {
+          "cafbr_enabled": false,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 0.6049718445477387,
+          "median_update_seconds": 0.6045702826231718,
+          "update_seconds": [
+            0.6078488198108971,
+            0.5895383590832353,
+            0.6010136320255697,
+            0.604006146080792,
+            0.6025398690253496,
+            0.6051344191655517,
+            0.6170425140298903,
+            0.611297304276377,
+            0.5931362551636994,
+            0.6144709810614586,
+            0.6040006247349083,
+            0.6096332101151347
+          ],
+          "measured_updates": 12,
+          "mean_loss": 10.17749547958374,
+          "parameter_sync_sha256": "6a3abf0604c4f5a464223733167c093f58a330251a75e09e469ad8f19a4c5f7b",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 10.71172046661377,
+              "reserved_gib": 12.111328125,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 10.71172046661377,
+              "reserved_gib": 12.111328125,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 2.296340703032911,
+          "full_validation_seconds": 56.030713154003024
+        },
+        "on": {
+          "cafbr_enabled": true,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 0.647132839464272,
+          "median_update_seconds": 0.6444927686825395,
+          "update_seconds": [
+            0.6427184329368174,
+            0.643987147603184,
+            0.632786912843585,
+            0.6507986108772457,
+            0.6449983897618949,
+            0.643660903442651,
+            0.6386101981624961,
+            0.6551627102307975,
+            0.6546420780941844,
+            0.6567090339958668,
+            0.6437457147985697,
+            0.6577739408239722
+          ],
+          "measured_updates": 12,
+          "mean_loss": 9.659512400627136,
+          "parameter_sync_sha256": "a01f855309ff87ea0d8eb1d7c07ab22b426e8caf5330ef7cb885d2105ec149a5",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 11.519667625427246,
+              "reserved_gib": 12.62890625,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 11.519667625427246,
+              "reserved_gib": 12.62890625,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 2.5363690149970353,
+          "full_validation_seconds": 61.88740396592766
+        }
+      },
+      "validation_iterations": [
+        2000,
+        4000,
+        6000,
+        8000,
+        10000,
+        12000,
+        14000,
+        16000,
+        18000,
+        20000,
+        22000,
+        24000,
+        26000,
+        28000,
+        30000,
+        32000,
+        34000,
+        36000,
+        38000,
+        40000
+      ],
+      "checkpoint_save_seconds": 0.8004154851660132,
+      "checkpoint_load_seconds": 0.3669623536989093,
+      "checkpoint_bytes": 50998074,
+      "estimated_train_hours": 6.956137133400059,
+      "estimated_validation_hours": 0.32755032533314077,
+      "estimated_total_hours_range": [
+        7.303800232402929,
+        7.305427090961796
+      ],
+      "recommended_hours_range": [
+        8.034180255643223,
+        9.131783863702246
+      ],
+      "methodology": "Real 512x512 PNG training on two DDP ranks; max-rank update timings after warmup, CAFBR off/on, finite losses and exact parameter-sync checks. Rank-zero subset validation extrapolated by batch count; includes periodic validation, one final best evaluation and worst-case new-best checkpoint saving each time. Recommended range adds 10-25 percent for system/logging variation. Peak training memory includes warmup, AdamW states and DDP buffers."
+    },
+    {
+      "status": "passed",
+      "config": {
+        "dataset": "CloudSEN12_L2A",
+        "model": "FMamba_CAFBR",
+        "data_root": "/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l2a",
+        "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base16_down5_scgm4_silu_b4",
+        "classes": [
+          "clear",
+          "thick cloud",
+          "thin cloud",
+          "cloud shadow"
+        ],
+        "image_size": [
+          512,
+          512
+        ],
+        "mean": [
+          123.675,
+          116.28,
+          103.53
+        ],
+        "std": [
+          58.395,
+          57.12,
+          57.375
+        ],
+        "base_channels": 16,
+        "batch_size": 4,
+        "num_workers": 4,
+        "max_iters": 40000,
+        "cafbr_start_ratio": 0.5,
+        "val_interval": 2000,
+        "log_interval": 50,
+        "lr": 0.0001,
+        "weight_decay": 0.05,
+        "poly_power": 0.9,
+        "seed": 42,
+        "device": "cuda",
+        "amp": false,
+        "keep_top_k": 3,
+        "selection_metric": "mIoU",
+        "ignore_index": 255,
+        "loss": {
+          "ce_weight": 5.0,
+          "dice_weight": 5.0,
+          "dice_eps": 1e-05
+        },
+        "fmamba": {
+          "scgm_num_groups": 4,
+          "skip_refinement": {
+            "enabled": true,
+            "type": "cloud_adaptive_frequency_boundary",
+            "reduction": 8,
+            "spatial_kernel": 7,
+            "detail_kernel": 3,
+            "gate_bias": 0.0,
+            "gate_scale_init": 1.0,
+            "detail_scale_init": 0.1,
+            "context_scale_init": 0.05,
+            "spectral_scale_init": 0.05,
+            "use_fourier": true,
+            "fourier_stages": [
+              "stage_4",
+              "stage_3",
+              "stage_2"
+            ],
+            "spectral_reduction": 4
+          },
+          "downsample_stages": 5,
+          "scgm_output_activation": "silu"
+        },
+        "validation_split": "test",
+        "test_split": "test",
+        "smoke_val_limit": 8,
+        "smoke_test_limit": 8,
+        "train_loss_only": true,
+        "lr_schedule": "cosine",
+        "warmup_ratio": 0.1,
+        "warmup_start_factor": 0.01,
+        "min_lr_ratio": 0.0,
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "world_size": 2
+      },
+      "python": "/root/anaconda3/envs/qwen3/bin/python",
+      "torch": "2.1.2+cu118",
+      "gpu_names": [
+        "NVIDIA RTX A6000",
+        "NVIDIA RTX A6000"
+      ],
+      "parameters": 4199766,
+      "train_samples": 8490,
+      "warmup_updates_per_phase": 3,
+      "phases": {
+        "off": {
+          "cafbr_enabled": false,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 0.6083538241606826,
+          "median_update_seconds": 0.607312377775088,
+          "update_seconds": [
+            0.6067550242878497,
+            0.6096992958337069,
+            0.6151819280348718,
+            0.6078697312623262,
+            0.6063634571619332,
+            0.6228357339277864,
+            0.5935322451405227,
+            0.6058786790817976,
+            0.6023913328535855,
+            0.6052700681611896,
+            0.6118585183285177,
+            0.6126098758541048
+          ],
+          "measured_updates": 12,
+          "mean_loss": 10.04084046681722,
+          "parameter_sync_sha256": "437da4aae137b1b4d6669e4a8e3301588f9b9610dbe2001bb82be7ee09070c65",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 10.71172046661377,
+              "reserved_gib": 12.111328125,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 10.71172046661377,
+              "reserved_gib": 12.111328125,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 2.488305142149329,
+          "full_validation_seconds": 60.714645468443635
+        },
+        "on": {
+          "cafbr_enabled": true,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 0.6529819568386301,
+          "median_update_seconds": 0.647718244465068,
+          "update_seconds": [
+            0.6478059580549598,
+            0.6436911621131003,
+            0.6817761301063001,
+            0.6644460908137262,
+            0.6594731463119388,
+            0.6476305308751762,
+            0.6444128323346376,
+            0.6474441760219634,
+            0.6396778109483421,
+            0.6626291177235544,
+            0.6528086420148611,
+            0.6439878847450018
+          ],
+          "measured_updates": 12,
+          "mean_loss": 9.409085949261984,
+          "parameter_sync_sha256": "1873df6ee5ea933cb9503e09ee2c2705e59989f1616ca985c6a4558e91695112",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 11.519667625427246,
+              "reserved_gib": 12.62890625,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 11.519667625427246,
+              "reserved_gib": 12.62890625,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 2.5601520757190883,
+          "full_validation_seconds": 62.46771064754576
+        }
+      },
+      "validation_iterations": [
+        2000,
+        4000,
+        6000,
+        8000,
+        10000,
+        12000,
+        14000,
+        16000,
+        18000,
+        20000,
+        22000,
+        24000,
+        26000,
+        28000,
+        30000,
+        32000,
+        34000,
+        36000,
+        38000,
+        40000
+      ],
+      "checkpoint_save_seconds": 0.6152917719446123,
+      "checkpoint_load_seconds": 0.2849707780405879,
+      "checkpoint_bytes": 50998074,
+      "estimated_train_hours": 7.007421005551738,
+      "estimated_validation_hours": 0.342173211433304,
+      "estimated_total_hours_range": [
+        7.369956842453202,
+        7.370443805002952
+      ],
+      "recommended_hours_range": [
+        8.106952526698523,
+        9.21305475625369
+      ],
+      "methodology": "Real 512x512 PNG training on two DDP ranks; max-rank update timings after warmup, CAFBR off/on, finite losses and exact parameter-sync checks. Rank-zero subset validation extrapolated by batch count; includes periodic validation, one final best evaluation and worst-case new-best checkpoint saving each time. Recommended range adds 10-25 percent for system/logging variation. Peak training memory includes warmup, AdamW states and DDP buffers."
+    },
+    {
+      "status": "passed",
+      "config": {
+        "dataset": "CloudSEN12_L1C",
+        "model": "FMamba_CAFBR",
+        "data_root": "/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l1c",
+        "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base32_down5_scgm4_silu_b4",
+        "classes": [
+          "clear",
+          "thick cloud",
+          "thin cloud",
+          "cloud shadow"
+        ],
+        "image_size": [
+          512,
+          512
+        ],
+        "mean": [
+          123.675,
+          116.28,
+          103.53
+        ],
+        "std": [
+          58.395,
+          57.12,
+          57.375
+        ],
+        "base_channels": 32,
+        "batch_size": 4,
+        "num_workers": 4,
+        "max_iters": 40000,
+        "cafbr_start_ratio": 0.5,
+        "val_interval": 2000,
+        "log_interval": 50,
+        "lr": 0.0001,
+        "weight_decay": 0.05,
+        "poly_power": 0.9,
+        "seed": 42,
+        "device": "cuda",
+        "amp": false,
+        "keep_top_k": 3,
+        "selection_metric": "mIoU",
+        "ignore_index": 255,
+        "loss": {
+          "ce_weight": 5.0,
+          "dice_weight": 5.0,
+          "dice_eps": 1e-05
+        },
+        "fmamba": {
+          "scgm_num_groups": 4,
+          "skip_refinement": {
+            "enabled": true,
+            "type": "cloud_adaptive_frequency_boundary",
+            "reduction": 8,
+            "spatial_kernel": 7,
+            "detail_kernel": 3,
+            "gate_bias": 0.0,
+            "gate_scale_init": 1.0,
+            "detail_scale_init": 0.1,
+            "context_scale_init": 0.05,
+            "spectral_scale_init": 0.05,
+            "use_fourier": true,
+            "fourier_stages": [
+              "stage_4",
+              "stage_3",
+              "stage_2"
+            ],
+            "spectral_reduction": 4
+          },
+          "downsample_stages": 5,
+          "scgm_output_activation": "silu"
+        },
+        "validation_split": "test",
+        "test_split": "test",
+        "smoke_val_limit": 8,
+        "smoke_test_limit": 8,
+        "train_loss_only": true,
+        "lr_schedule": "cosine",
+        "warmup_ratio": 0.1,
+        "warmup_start_factor": 0.01,
+        "min_lr_ratio": 0.0,
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "world_size": 2
+      },
+      "python": "/root/anaconda3/envs/qwen3/bin/python",
+      "torch": "2.1.2+cu118",
+      "gpu_names": [
+        "NVIDIA RTX A6000",
+        "NVIDIA RTX A6000"
+      ],
+      "parameters": 16260830,
+      "train_samples": 8490,
+      "warmup_updates_per_phase": 3,
+      "phases": {
+        "off": {
+          "cafbr_enabled": false,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 1.122465821991985,
+          "median_update_seconds": 1.1235838099382818,
+          "update_seconds": [
+            1.1098280916921794,
+            1.1172999776899815,
+            1.1363083189353347,
+            1.1288890023715794,
+            1.1082648569718003,
+            1.1206185398623347,
+            1.1223774557001889,
+            1.107075064908713,
+            1.1247901641763747,
+            1.1264017107896507,
+            1.1282707676291466,
+            1.1394659131765366
+          ],
+          "measured_updates": 12,
+          "mean_loss": 10.195135513941446,
+          "parameter_sync_sha256": "46f321b8879bfde351e54639e17dfb6b36d9e7b06e2eb32bef67b6053654cbd5",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 19.217815399169922,
+              "reserved_gib": 21.31640625,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 19.217815399169922,
+              "reserved_gib": 21.31640625,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 3.1550668589770794,
+          "full_validation_seconds": 76.98363135904074
+        },
+        "on": {
+          "cafbr_enabled": true,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 1.1931132291986917,
+          "median_update_seconds": 1.1982239377684891,
+          "update_seconds": [
+            1.1617593062110245,
+            1.1982833337970078,
+            1.1785765020176768,
+            1.2012716848403215,
+            1.2001151130534708,
+            1.1871598190627992,
+            1.2017227038741112,
+            1.1957847159355879,
+            1.1981645417399704,
+            1.200765023007989,
+            1.2043493138626218,
+            1.18940669298172
+          ],
+          "measured_updates": 12,
+          "mean_loss": 9.167009075482687,
+          "parameter_sync_sha256": "08b61ad202c958236fdf0f17eb952653a8f9b4820de55dab3f48f6db32ed7ec4",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 20.768682956695557,
+              "reserved_gib": 23.328125,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 20.768682956695557,
+              "reserved_gib": 23.328125,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 3.575360858812928,
+          "full_validation_seconds": 87.23880495503545
+        }
+      },
+      "validation_iterations": [
+        2000,
+        4000,
+        6000,
+        8000,
+        10000,
+        12000,
+        14000,
+        16000,
+        18000,
+        20000,
+        22000,
+        24000,
+        26000,
+        28000,
+        30000,
+        32000,
+        34000,
+        36000,
+        38000,
+        40000
+      ],
+      "checkpoint_save_seconds": 1.3380036437883973,
+      "checkpoint_load_seconds": 0.49886049423366785,
+      "checkpoint_bytes": 195765754,
+      "estimated_train_hours": 12.864328062170426,
+      "estimated_validation_hours": 0.45617343420576717,
+      "estimated_total_hours_range": [
+        13.349457764356483,
+        13.352306423688702
+      ],
+      "recommended_hours_range": [
+        14.684403540792133,
+        16.690383029610878
+      ],
+      "methodology": "Real 512x512 PNG training on two DDP ranks; max-rank update timings after warmup, CAFBR off/on, finite losses and exact parameter-sync checks. Rank-zero subset validation extrapolated by batch count; includes periodic validation, one final best evaluation and worst-case new-best checkpoint saving each time. Recommended range adds 10-25 percent for system/logging variation. Peak training memory includes warmup, AdamW states and DDP buffers."
+    },
+    {
+      "status": "passed",
+      "config": {
+        "dataset": "CloudSEN12_L2A",
+        "model": "FMamba_CAFBR",
+        "data_root": "/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l2a",
+        "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base32_down5_scgm4_silu_b4",
+        "classes": [
+          "clear",
+          "thick cloud",
+          "thin cloud",
+          "cloud shadow"
+        ],
+        "image_size": [
+          512,
+          512
+        ],
+        "mean": [
+          123.675,
+          116.28,
+          103.53
+        ],
+        "std": [
+          58.395,
+          57.12,
+          57.375
+        ],
+        "base_channels": 32,
+        "batch_size": 4,
+        "num_workers": 4,
+        "max_iters": 40000,
+        "cafbr_start_ratio": 0.5,
+        "val_interval": 2000,
+        "log_interval": 50,
+        "lr": 0.0001,
+        "weight_decay": 0.05,
+        "poly_power": 0.9,
+        "seed": 42,
+        "device": "cuda",
+        "amp": false,
+        "keep_top_k": 3,
+        "selection_metric": "mIoU",
+        "ignore_index": 255,
+        "loss": {
+          "ce_weight": 5.0,
+          "dice_weight": 5.0,
+          "dice_eps": 1e-05
+        },
+        "fmamba": {
+          "scgm_num_groups": 4,
+          "skip_refinement": {
+            "enabled": true,
+            "type": "cloud_adaptive_frequency_boundary",
+            "reduction": 8,
+            "spatial_kernel": 7,
+            "detail_kernel": 3,
+            "gate_bias": 0.0,
+            "gate_scale_init": 1.0,
+            "detail_scale_init": 0.1,
+            "context_scale_init": 0.05,
+            "spectral_scale_init": 0.05,
+            "use_fourier": true,
+            "fourier_stages": [
+              "stage_4",
+              "stage_3",
+              "stage_2"
+            ],
+            "spectral_reduction": 4
+          },
+          "downsample_stages": 5,
+          "scgm_output_activation": "silu"
+        },
+        "validation_split": "test",
+        "test_split": "test",
+        "smoke_val_limit": 8,
+        "smoke_test_limit": 8,
+        "train_loss_only": true,
+        "lr_schedule": "cosine",
+        "warmup_ratio": 0.1,
+        "warmup_start_factor": 0.01,
+        "min_lr_ratio": 0.0,
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "world_size": 2
+      },
+      "python": "/root/anaconda3/envs/qwen3/bin/python",
+      "torch": "2.1.2+cu118",
+      "gpu_names": [
+        "NVIDIA RTX A6000",
+        "NVIDIA RTX A6000"
+      ],
+      "parameters": 16260830,
+      "train_samples": 8490,
+      "warmup_updates_per_phase": 3,
+      "phases": {
+        "off": {
+          "cafbr_enabled": false,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 1.1234728718021263,
+          "median_update_seconds": 1.1257028258405626,
+          "update_seconds": [
+            1.1285155909135938,
+            1.1283418671227992,
+            1.1308530382812023,
+            1.1293001011945307,
+            1.117453694343567,
+            1.1260858518071473,
+            1.125319799873978,
+            1.1202861042693257,
+            1.1202169125899673,
+            1.1269532679580152,
+            1.119312581140548,
+            1.1090356521308422
+          ],
+          "measured_updates": 12,
+          "mean_loss": 10.045278231302897,
+          "parameter_sync_sha256": "29bfa3be8af6cdf7c6a12e4de070d3d298ff0f7e595780a8c64d92c50f7d9617",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 19.217815399169922,
+              "reserved_gib": 21.31640625,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 19.217815399169922,
+              "reserved_gib": 21.31640625,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 3.1997201340273023,
+          "full_validation_seconds": 78.07317127026617
+        },
+        "on": {
+          "cafbr_enabled": true,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 1.1862795371950294,
+          "median_update_seconds": 1.1863073843996972,
+          "update_seconds": [
+            1.200100677087903,
+            1.1954547162167728,
+            1.17459118925035,
+            1.1957208006642759,
+            1.1770499711856246,
+            1.1846536877565086,
+            1.1812191060744226,
+            1.1732995072379708,
+            1.1948833889327943,
+            1.1918240627273917,
+            1.1785962581634521,
+            1.1879610810428858
+          ],
+          "measured_updates": 12,
+          "mean_loss": 8.957541366418203,
+          "parameter_sync_sha256": "44b24463c2de1b9a8051dbff1f515a22b9a84247380c61120fe4895b4a7212a0",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 20.768682956695557,
+              "reserved_gib": 23.328125,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 20.768682956695557,
+              "reserved_gib": 23.328125,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 3.5347034838050604,
+          "full_validation_seconds": 86.24676500484347
+        }
+      },
+      "validation_iterations": [
+        2000,
+        4000,
+        6000,
+        8000,
+        10000,
+        12000,
+        14000,
+        16000,
+        18000,
+        20000,
+        22000,
+        24000,
+        26000,
+        28000,
+        30000,
+        32000,
+        34000,
+        36000,
+        38000,
+        40000
+      ],
+      "checkpoint_save_seconds": 1.5082666738890111,
+      "checkpoint_load_seconds": 0.6814901623874903,
+      "checkpoint_bytes": 195765754,
+      "estimated_train_hours": 12.831957827761975,
+      "estimated_validation_hours": 0.45644426743086,
+      "estimated_total_hours_range": [
+        13.318657649334625,
+        13.320928092038672
+      ],
+      "recommended_hours_range": [
+        14.650523414268088,
+        16.65116011504834
+      ],
+      "methodology": "Real 512x512 PNG training on two DDP ranks; max-rank update timings after warmup, CAFBR off/on, finite losses and exact parameter-sync checks. Rank-zero subset validation extrapolated by batch count; includes periodic validation, one final best evaluation and worst-case new-best checkpoint saving each time. Recommended range adds 10-25 percent for system/logging variation. Peak training memory includes warmup, AdamW states and DDP buffers."
+    },
+    {
+      "status": "passed",
+      "config": {
+        "dataset": "CloudSEN12_L1C",
+        "model": "FMamba_CAFBR",
+        "data_root": "/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l1c",
+        "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base64_down5_scgm4_silu_b4",
+        "classes": [
+          "clear",
+          "thick cloud",
+          "thin cloud",
+          "cloud shadow"
+        ],
+        "image_size": [
+          512,
+          512
+        ],
+        "mean": [
+          123.675,
+          116.28,
+          103.53
+        ],
+        "std": [
+          58.395,
+          57.12,
+          57.375
+        ],
+        "base_channels": 64,
+        "batch_size": 4,
+        "num_workers": 4,
+        "max_iters": 40000,
+        "cafbr_start_ratio": 0.5,
+        "val_interval": 2000,
+        "log_interval": 50,
+        "lr": 0.0001,
+        "weight_decay": 0.05,
+        "poly_power": 0.9,
+        "seed": 42,
+        "device": "cuda",
+        "amp": false,
+        "keep_top_k": 3,
+        "selection_metric": "mIoU",
+        "ignore_index": 255,
+        "loss": {
+          "ce_weight": 5.0,
+          "dice_weight": 5.0,
+          "dice_eps": 1e-05
+        },
+        "fmamba": {
+          "scgm_num_groups": 4,
+          "skip_refinement": {
+            "enabled": true,
+            "type": "cloud_adaptive_frequency_boundary",
+            "reduction": 8,
+            "spatial_kernel": 7,
+            "detail_kernel": 3,
+            "gate_bias": 0.0,
+            "gate_scale_init": 1.0,
+            "detail_scale_init": 0.1,
+            "context_scale_init": 0.05,
+            "spectral_scale_init": 0.05,
+            "use_fourier": true,
+            "fourier_stages": [
+              "stage_4",
+              "stage_3",
+              "stage_2"
+            ],
+            "spectral_reduction": 4
+          },
+          "downsample_stages": 5,
+          "scgm_output_activation": "silu"
+        },
+        "validation_split": "test",
+        "test_split": "test",
+        "smoke_val_limit": 8,
+        "smoke_test_limit": 8,
+        "train_loss_only": true,
+        "lr_schedule": "cosine",
+        "warmup_ratio": 0.1,
+        "warmup_start_factor": 0.01,
+        "min_lr_ratio": 0.0,
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "world_size": 2
+      },
+      "python": "/root/anaconda3/envs/qwen3/bin/python",
+      "torch": "2.1.2+cu118",
+      "gpu_names": [
+        "NVIDIA RTX A6000",
+        "NVIDIA RTX A6000"
+      ],
+      "parameters": 64057038,
+      "train_samples": 8490,
+      "warmup_updates_per_phase": 3,
+      "phases": {
+        "off": {
+          "cafbr_enabled": false,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 1.9824879697989672,
+          "median_update_seconds": 1.988808555295691,
+          "update_seconds": [
+            1.9729418377391994,
+            1.9894235963001847,
+            1.9641553210094571,
+            1.9777501351200044,
+            1.9581962511874735,
+            1.972773657180369,
+            1.988193514291197,
+            1.994317736942321,
+            1.9943143390119076,
+            1.9901314191520214,
+            1.9954818389378488,
+            1.992175990715623
+          ],
+          "measured_updates": 12,
+          "mean_loss": 9.949218531449636,
+          "parameter_sync_sha256": "59567f2f08e20c5fd086359dd2ae556f4f5db99635fc9381d47e07b00a3772d6",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 36.936458587646484,
+              "reserved_gib": 41.10546875,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 36.93180227279663,
+              "reserved_gib": 41.09765625,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 5.783200134988874,
+          "full_validation_seconds": 141.11008329372854
+        },
+        "on": {
+          "cafbr_enabled": true,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 2.099736716443052,
+          "median_update_seconds": 2.0989038238767534,
+          "update_seconds": [
+            2.0921154129318893,
+            2.1113085760734975,
+            2.0942826392129064,
+            2.107875823043287,
+            2.1054419721476734,
+            2.0959618743509054,
+            2.092311441898346,
+            2.0995754818432033,
+            2.088221393059939,
+            2.0982321659103036,
+            2.099813959095627,
+            2.111699857749045
+          ],
+          "measured_updates": 12,
+          "mean_loss": 8.758000830809275,
+          "parameter_sync_sha256": "6902a2e1f778c9dc732f7d7d22b50a8110467724b1359eb6c5c947db9bfe595c",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 39.996620655059814,
+              "reserved_gib": 43.130859375,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 39.99120616912842,
+              "reserved_gib": 43.123046875,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 5.910958180669695,
+          "full_validation_seconds": 144.22737960834056
+        }
+      },
+      "validation_iterations": [
+        2000,
+        4000,
+        6000,
+        8000,
+        10000,
+        12000,
+        14000,
+        16000,
+        18000,
+        20000,
+        22000,
+        24000,
+        26000,
+        28000,
+        30000,
+        32000,
+        34000,
+        36000,
+        38000,
+        40000
+      ],
+      "checkpoint_save_seconds": 4.966542127076536,
+      "checkpoint_load_seconds": 1.3541845553554595,
+      "checkpoint_bytes": 769390458,
+      "estimated_train_hours": 22.679026034677886,
+      "estimated_validation_hours": 0.7926040636168584,
+      "estimated_total_hours_range": [
+        23.53879540673658,
+        23.53966132237953
+      ],
+      "recommended_hours_range": [
+        25.89267494741024,
+        29.424576652974412
+      ],
+      "methodology": "Real 512x512 PNG training on two DDP ranks; max-rank update timings after warmup, CAFBR off/on, finite losses and exact parameter-sync checks. Rank-zero subset validation extrapolated by batch count; includes periodic validation, one final best evaluation and worst-case new-best checkpoint saving each time. Recommended range adds 10-25 percent for system/logging variation. Peak training memory includes warmup, AdamW states and DDP buffers."
+    },
+    {
+      "status": "passed",
+      "config": {
+        "dataset": "CloudSEN12_L2A",
+        "model": "FMamba_CAFBR",
+        "data_root": "/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l2a",
+        "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base64_down5_scgm4_silu_b4",
+        "classes": [
+          "clear",
+          "thick cloud",
+          "thin cloud",
+          "cloud shadow"
+        ],
+        "image_size": [
+          512,
+          512
+        ],
+        "mean": [
+          123.675,
+          116.28,
+          103.53
+        ],
+        "std": [
+          58.395,
+          57.12,
+          57.375
+        ],
+        "base_channels": 64,
+        "batch_size": 4,
+        "num_workers": 4,
+        "max_iters": 40000,
+        "cafbr_start_ratio": 0.5,
+        "val_interval": 2000,
+        "log_interval": 50,
+        "lr": 0.0001,
+        "weight_decay": 0.05,
+        "poly_power": 0.9,
+        "seed": 42,
+        "device": "cuda",
+        "amp": false,
+        "keep_top_k": 3,
+        "selection_metric": "mIoU",
+        "ignore_index": 255,
+        "loss": {
+          "ce_weight": 5.0,
+          "dice_weight": 5.0,
+          "dice_eps": 1e-05
+        },
+        "fmamba": {
+          "scgm_num_groups": 4,
+          "skip_refinement": {
+            "enabled": true,
+            "type": "cloud_adaptive_frequency_boundary",
+            "reduction": 8,
+            "spatial_kernel": 7,
+            "detail_kernel": 3,
+            "gate_bias": 0.0,
+            "gate_scale_init": 1.0,
+            "detail_scale_init": 0.1,
+            "context_scale_init": 0.05,
+            "spectral_scale_init": 0.05,
+            "use_fourier": true,
+            "fourier_stages": [
+              "stage_4",
+              "stage_3",
+              "stage_2"
+            ],
+            "spectral_reduction": 4
+          },
+          "downsample_stages": 5,
+          "scgm_output_activation": "silu"
+        },
+        "validation_split": "test",
+        "test_split": "test",
+        "smoke_val_limit": 8,
+        "smoke_test_limit": 8,
+        "train_loss_only": true,
+        "lr_schedule": "cosine",
+        "warmup_ratio": 0.1,
+        "warmup_start_factor": 0.01,
+        "min_lr_ratio": 0.0,
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "world_size": 2
+      },
+      "python": "/root/anaconda3/envs/qwen3/bin/python",
+      "torch": "2.1.2+cu118",
+      "gpu_names": [
+        "NVIDIA RTX A6000",
+        "NVIDIA RTX A6000"
+      ],
+      "parameters": 64057038,
+      "train_samples": 8490,
+      "warmup_updates_per_phase": 3,
+      "phases": {
+        "off": {
+          "cafbr_enabled": false,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 2.0109754137617224,
+          "median_update_seconds": 2.0114551929291338,
+          "update_seconds": [
+            2.000411121174693,
+            1.996024550870061,
+            1.9993022233247757,
+            2.009147208184004,
+            2.0302114132791758,
+            2.011038837954402,
+            2.0118715479038656,
+            1.9995898408815265,
+            2.0183543218299747,
+            2.014763565734029,
+            2.021537410095334,
+            2.0194529239088297
+          ],
+          "measured_updates": 12,
+          "mean_loss": 9.78784199555715,
+          "parameter_sync_sha256": "0eefc75cb4b5ece0b928ef810229a0bfbed12fa0e86c3abd2fc084d2c7593883",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 36.936458587646484,
+              "reserved_gib": 41.10546875,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 36.936458587646484,
+              "reserved_gib": 41.10546875,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 5.793049234896898,
+          "full_validation_seconds": 141.3504013314843
+        },
+        "on": {
+          "cafbr_enabled": true,
+          "cafbr_start_iteration": 20001,
+          "mean_update_seconds": 2.109432114753872,
+          "median_update_seconds": 2.108031139243394,
+          "update_seconds": [
+            2.0999530819244683,
+            2.114888814277947,
+            2.1175044970586896,
+            2.1016770768910646,
+            2.123285733163357,
+            2.095003909431398,
+            2.121162697672844,
+            2.1052296301349998,
+            2.090896727051586,
+            2.1108326483517885,
+            2.1310135582461953,
+            2.1017370028421283
+          ],
+          "measured_updates": 12,
+          "mean_loss": 8.228386183579763,
+          "parameter_sync_sha256": "e12aba1366aea18eb09f1247806b87e5420bd456de4c11c96d4ebe2a9e9b0ac1",
+          "training_peak_memory_by_rank": [
+            {
+              "rank": 0,
+              "allocated_gib": 39.996620655059814,
+              "reserved_gib": 43.130859375,
+              "total_gib": 47.535888671875
+            },
+            {
+              "rank": 1,
+              "allocated_gib": 39.996620655059814,
+              "reserved_gib": 43.130859375,
+              "total_gib": 47.535888671875
+            }
+          ],
+          "measured_validation_samples": 40,
+          "validation_samples": 975,
+          "validation_seconds": 6.102963557932526,
+          "full_validation_seconds": 148.91231081355363
+        }
+      },
+      "validation_iterations": [
+        2000,
+        4000,
+        6000,
+        8000,
+        10000,
+        12000,
+        14000,
+        16000,
+        18000,
+        20000,
+        22000,
+        24000,
+        26000,
+        28000,
+        30000,
+        32000,
+        34000,
+        36000,
+        38000,
+        40000
+      ],
+      "checkpoint_save_seconds": 4.563331479206681,
+      "checkpoint_load_seconds": 1.2943270248360932,
+      "checkpoint_bytes": 769390458,
+      "estimated_train_hours": 22.89115293619775,
+      "estimated_validation_hours": 0.8062853115139943,
+      "estimated_total_hours_range": [
+        23.76241362491742,
+        23.76451415532911
+      ],
+      "recommended_hours_range": [
+        26.138654987409165,
+        29.705642694161387
+      ],
+      "methodology": "Real 512x512 PNG training on two DDP ranks; max-rank update timings after warmup, CAFBR off/on, finite losses and exact parameter-sync checks. Rank-zero subset validation extrapolated by batch count; includes periodic validation, one final best evaluation and worst-case new-best checkpoint saving each time. Recommended range adds 10-25 percent for system/logging variation. Peak training memory includes warmup, AdamW states and DDP buffers."
+    }
+  ],
+  "estimated_all_six_sequential_hours_range": [
+    97.50738967222138,
+    110.81660111175096
+  ],
+  "training_entry_smoke": {
+    "status": "passed",
+    "dataset": "CloudSEN12_L2A",
+    "base_channels": 64,
+    "batch_size_per_gpu": 4,
+    "grad_accum_steps": 1,
+    "effective_batch_size": 8,
+    "updates": 5,
+    "total_rank_micro_batches": 10,
+    "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base64_down5_scgm4_silu_b4_entry_smoke",
+    "training": [
+      {
+        "iteration": 1,
+        "recorded_at": "2026-10-10T06:34:13.230842+00:00",
+        "loss": 11.946840763092041,
+        "lr": 1.0000000000000002e-06,
+        "first_iteration": 1,
+        "batches": 2,
+        "optimizer_updates": 1,
+        "samples": 8,
+        "micro_batches_completed": 2,
+        "world_size": 2,
+        "parameter_sync_sha256": "e353bba79969dc6ead2516a99ae2205638e4bba8e9a03981f9ae6db431923b95",
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "cafbr_enabled": false,
+        "cafbr_start_iteration": 3,
+        "data_split": "train",
+        "role": "augmented training batches; evolving model weights"
+      },
+      {
+        "iteration": 2,
+        "recorded_at": "2026-10-10T06:34:23.399105+00:00",
+        "loss": 11.906784057617188,
+        "lr": 0.0001,
+        "first_iteration": 2,
+        "batches": 2,
+        "optimizer_updates": 1,
+        "samples": 8,
+        "micro_batches_completed": 4,
+        "world_size": 2,
+        "parameter_sync_sha256": "aef77dff6224b4841f3a2c807271391e7f3583f28e37518b2a92288e6e42f26a",
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "cafbr_enabled": false,
+        "cafbr_start_iteration": 3,
+        "data_split": "train",
+        "role": "augmented training batches; evolving model weights"
+      },
+      {
+        "iteration": 3,
+        "recorded_at": "2026-10-10T06:34:30.977579+00:00",
+        "loss": 11.44936752319336,
+        "lr": 8.535533905932738e-05,
+        "first_iteration": 3,
+        "batches": 2,
+        "optimizer_updates": 1,
+        "samples": 8,
+        "micro_batches_completed": 6,
+        "world_size": 2,
+        "parameter_sync_sha256": "08e306d06970375bef3416a53e3163a7abebc2910a8bc36eb77299a759aa2200",
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "cafbr_enabled": true,
+        "cafbr_start_iteration": 3,
+        "data_split": "train",
+        "role": "augmented training batches; evolving model weights"
+      },
+      {
+        "iteration": 4,
+        "recorded_at": "2026-10-10T06:34:38.351193+00:00",
+        "loss": 11.031795501708984,
+        "lr": 5e-05,
+        "first_iteration": 4,
+        "batches": 2,
+        "optimizer_updates": 1,
+        "samples": 8,
+        "micro_batches_completed": 8,
+        "world_size": 2,
+        "parameter_sync_sha256": "bf2b779e824c8672eb0882e965030d92ae2bb8cfc005197df6d7a4630e7a42e8",
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "cafbr_enabled": true,
+        "cafbr_start_iteration": 3,
+        "data_split": "train",
+        "role": "augmented training batches; evolving model weights"
+      },
+      {
+        "iteration": 5,
+        "recorded_at": "2026-10-10T06:34:44.908953+00:00",
+        "loss": 10.706459522247314,
+        "lr": 1.4644660940672627e-05,
+        "first_iteration": 5,
+        "batches": 2,
+        "optimizer_updates": 1,
+        "samples": 8,
+        "micro_batches_completed": 10,
+        "world_size": 2,
+        "parameter_sync_sha256": "8e2195f9848806883b392524ee24e33a221cb0ac00d401c07d77798f3a349402",
+        "grad_accum_steps": 1,
+        "effective_batch_size": 8,
+        "cafbr_enabled": true,
+        "cafbr_start_iteration": 3,
+        "data_split": "train",
+        "role": "augmented training batches; evolving model weights"
+      }
+    ],
+    "best_test": {
+      "iteration": 1,
+      "recorded_at": "2026-10-10T06:34:51.873796+00:00",
+      "aAcc": 39.000558853149414,
+      "mIoU": 9.836839015020454,
+      "mAcc": 24.599613753591942,
+      "mDice": 14.182148221567568,
+      "mFscore": 28.364296443135135,
+      "mPrecision": 10.754715839682135,
+      "mRecall": 24.599613753591942,
+      "per_class": {
+        "clear": {
+          "IoU": 39.08268474301283,
+          "Acc": 98.11384417720835,
+          "Dice": 56.20064757194909,
+          "Fscore": 56.20064757194909,
+          "Precision": 39.378548226970864,
+          "Recall": 98.11384417720835
+        },
+        "thick cloud": {
+          "IoU": 0.0,
+          "Acc": 0.0,
+          "Dice": 0.0,
+          "Fscore": null,
+          "Precision": 0.0,
+          "Recall": 0.0
+        },
+        "thin cloud": {
+          "IoU": 0.2646713170689956,
+          "Acc": 0.28461083715941393,
+          "Dice": 0.5279453143211733,
+          "Fscore": 0.5279453143211733,
+          "Precision": 3.6403151317576743,
+          "Recall": 0.28461083715941393
+        },
+        "cloud shadow": {
+          "IoU": 0.0,
+          "Acc": 0.0,
+          "Dice": 0.0,
+          "Fscore": null,
+          "Precision": 0.0,
+          "Recall": 0.0
+        }
+      },
+      "confusion_matrix": [
+        [
+          817097,
+          80,
+          15622,
+          6
+        ],
+        [
+          577690,
+          0,
+          4034,
+          0
+        ],
+        [
+          281687,
+          0,
+          804,
+          0
+        ],
+        [
+          398506,
+          0,
+          1626,
+          0
+        ]
+      ],
+      "val_loss": 1.3819090723991394,
+      "ce_loss": 1.3819090723991394,
+      "loss": 10.746262550354004,
+      "samples": 8,
+      "data_time": 0.09629302355460823,
+      "time": 0.5502991711255163,
+      "data_split": "test",
+      "cafbr_enabled": false,
+      "cafbr_start_iteration": 3,
+      "role": "final best checkpoint evaluation",
+      "checkpoint": "checkpoints/best.pth",
+      "checkpoint_sha256": "c54f2597e679c87f1aad2598ea5731b5bf8382e718c1ea54f412abe71b83d42d"
+    }
+  }
+}
