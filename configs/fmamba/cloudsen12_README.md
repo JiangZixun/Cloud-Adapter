@@ -329,6 +329,36 @@ verified this reporting path.
 It uses `--redirects 1:3` rather than `--tee 3`: torchrun's line-based tee relay
 turns tqdm carriage-return updates into separate output lines.
 
+## L1C base16/base32 min-max variants, 30 epochs
+
+`cloudsen12_l1c_native_base16_down5_minmax.json` and
+`cloudsen12_l1c_native_base32_down5_minmax.json` use RGB / 255 with
+`mean=[0,0,0]`, `std=[255,255,255]`. They retain their respective original
+base16/base32 settings: five down/up stages, SCGM4/SiLU, 30 epochs,
+batch4/GPU, accumulation1 and full test-split evaluation after each epoch.
+Their experiment directories end in `_b4_e30_minmax`.
+
+Run both sequentially, with W&B enabled in each child launcher:
+
+```bash
+bash start_train_minmax.sh
+```
+
+Or run one variant:
+
+```bash
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base16_down5_minmax.sh
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base32_down5_minmax.sh
+```
+
+The launchers retain in-place rank-0 tqdm refreshes and record rank-1 output
+and both ranks' exceptions in separate `experiments/ddp_logs/...` directories.
+These are independent fresh runs; the existing `start_train.sh` remains the
+standardized-input version. Both configs, real train/test normalized samples,
+shell syntax and the combined launch order/arguments were verified. No new
+GPU smoke was run for these variants; the shared model/pipeline had already
+been tested, and the GPUs were occupied by an existing training run.
+
 ## Current entrypoint: L1C base16/base32, 30 epochs
 
 `start_train.sh` runs only L1C base16 and base32 sequentially with `--wandb`.
