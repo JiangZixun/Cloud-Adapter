@@ -29,12 +29,12 @@ class FMambaScalingTests(unittest.TestCase):
     def test_five_downsamples_at_512_and_all_branch_gradients(self):
         from baselines.fmamba_cafbr.models import native_model
         from baselines.model_factory import training_loss
-        for base in (16, 32):
+        for base in (16, 32, 64):
             with self.subTest(base=base):
                 config = json.loads((ROOT / f'configs/fmamba/cloudsen12_l1c_native_base{base}_down5.json').read_text())
                 model = native_model(config).cuda().train()
                 self.assertEqual(sum(p.numel() for p in model.parameters()),
-                                 {16: 4199547, 32: 16260539}[base])
+                                 {16: 4199547, 32: 16260539, 64: 64056603}[base])
                 self.assertEqual(sum(isinstance(m, torch.nn.ConvTranspose2d)
                                      for m in model.modules()), 5)
                 self.assertEqual(model.stage_1[0].stride, (2, 2))

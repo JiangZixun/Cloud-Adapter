@@ -23,3 +23,5 @@ bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base16_down5.sh --wandb
 bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base16_down5.sh --wandb
 bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base32_down5.sh --wandb
 bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base32_down5.sh --wandb
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base64_down5.sh --wandb
+bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base64_down5.sh --wandb

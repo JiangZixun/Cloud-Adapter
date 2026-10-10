@@ -169,39 +169,40 @@ all twenty periodic test-set evaluations, final best testing and checkpoint writ
 
 ## Five-downsample native FMamba variants
 
-The `native_base16_down5` and `native_base32_down5` configurations support both
-CloudSEN12 L1C and L2A. `base_channels` now controls the actual model width;
+The `native_base16_down5`, `native_base32_down5`, and `native_base64_down5`
+configurations support both CloudSEN12 L1C and L2A. `base_channels` now controls the actual model width;
 `fmamba.downsample_stages=5` selects a stride-2 first convolution followed by
 four 2x2 max pools. The spatial pyramid matches UNetMobv2: 256, 128, 64, 32,
 16 for a 512x512 input. Upsampling remains FMamba's learned transpose convolution,
 not UNetMobv2's nearest-neighbor interpolation.
 
-| Stage | Resolution | Base 16 channels | Base 32 channels |
-|---|---:|---:|---:|
-| Encoder 1 | 256x256 | 16 | 32 |
-| Encoder 2 | 128x128 | 32 | 64 |
-| Encoder 3 | 64x64 | 64 | 128 |
-| Encoder 4 | 32x32 | 128 | 256 |
-| Bottleneck | 16x16 | 256 | 512 |
-| Decoder 4 | 32x32 | 128 | 256 |
-| Decoder 3 | 64x64 | 64 | 128 |
-| Decoder 2 | 128x128 | 32 | 64 |
-| Decoder 1 | 256x256 | 16 | 32 |
-| Final decoder (no skip) | 512x512 | 16 | 32 |
-| Segmentation logits | 512x512 | 4 | 4 |
+| Stage | Resolution | Base 16 channels | Base 32 channels | Base 64 channels |
+|---|---:|---:|---:|---:|
+| Encoder 1 | 256x256 | 16 | 32 | 64 |
+| Encoder 2 | 128x128 | 32 | 64 | 128 |
+| Encoder 3 | 64x64 | 64 | 128 | 256 |
+| Encoder 4 | 32x32 | 128 | 256 | 512 |
+| Bottleneck | 16x16 | 256 | 512 | 1024 |
+| Decoder 4 | 32x32 | 128 | 256 | 512 |
+| Decoder 3 | 64x64 | 64 | 128 | 256 |
+| Decoder 2 | 128x128 | 32 | 64 | 128 |
+| Decoder 1 | 256x256 | 16 | 32 | 64 |
+| Final decoder (no skip) | 512x512 | 16 | 32 | 64 |
+| Segmentation logits | 512x512 | 4 | 4 | 4 |
 
-Both variants have five downsampling and five upsampling operations, four CAFBR
-skip refiners, four encoder and five decoder FourierVSS blocks. The bottleneck
+All three variants have five downsampling and five upsampling operations,
+four CAFBR skip refiners, four encoder and five decoder FourierVSS blocks. The bottleneck
 uses convolution only. CAFBR Fourier branches run at encoder stages 2/3/4;
 Mamba state size remains 16. The existing CAFBR activation schedule, loss,
 optimizer, LR schedule and effective batch size of four are retained.
 
 Four-class parameter counts: base 16 = 4,199,547 (93.41% fewer than the original
-63,768,409); base 32 = 16,260,539 (74.50% fewer). Parameter reduction does not
+63,768,409); base 32 = 16,260,539 (74.50% fewer); base 64 = 64,056,603
+(0.45% more than the original four-downsample base64). Parameter reduction does not
 translate directly into the same runtime or activation-memory reduction.
 
-`start_train.sh` runs base16 L1C/L2A, then base32 L1C/L2A sequentially using both
-GPUs and `--wandb`. Each configuration has its own experiment directory.
+`start_train.sh` runs base16 L1C/L2A, then base32 L1C/L2A, then base64 L1C/L2A
+sequentially using both GPUs and `--wandb`. Each configuration has its own experiment directory.
 
 ```bash
 bash start_train.sh
@@ -211,6 +212,8 @@ bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base16_down5.sh --wandb
 bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base16_down5.sh --wandb
 bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base32_down5.sh --wandb
 bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base32_down5.sh --wandb
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base64_down5.sh --wandb
+bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base64_down5.sh --wandb
 ```
 
 The original base64/four-downsample configs remain available. Their checkpoint

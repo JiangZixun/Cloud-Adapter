@@ -608,7 +608,311 @@
         "checkpoint_sha256": "e192a6dca4728343ed0b9e7e11a7fa6617376ed1669ea25678d5433bdbbe0f86"
       },
       "results_path": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base32_down5_ddp_smoke/results.json"
+    },
+    {
+      "dataset": "CloudSEN12_L1C",
+      "base_channels": 64,
+      "parameters": 64056603,
+      "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base64_down5_ddp_smoke",
+      "elapsed_seconds": 57.1,
+      "status": "passed",
+      "environment": {
+        "python": "3.11.7 (main, Dec 15 2023, 18:12:31) [GCC 11.2.0]",
+        "executable": "/root/anaconda3/envs/qwen3/bin/python",
+        "torch": "2.1.2+cu118",
+        "device": "cuda:0",
+        "gpu": "NVIDIA RTX A6000",
+        "cuda": "11.8",
+        "model": "FMamba_CAFBR",
+        "parameters": 64056603,
+        "train_samples": 8,
+        "validation_samples": 8,
+        "validation_split": "test",
+        "checkpoint_selection_split": "test",
+        "test_split": "test",
+        "train_loss_only": true,
+        "physical_batch_size": 1,
+        "grad_accum_steps": 2,
+        "effective_batch_size": 4,
+        "iteration_unit": "optimizer update",
+        "distributed": true,
+        "world_size": 2,
+        "backend": "nccl",
+        "gpu_names": [
+          "NVIDIA RTX A6000",
+          "NVIDIA RTX A6000"
+        ]
+      },
+      "training": [
+        {
+          "iteration": 1,
+          "loss": 11.762738227844238,
+          "cafbr_enabled": false,
+          "parameter_sync_sha256": "bb7d67a2fd269ae989716504cec21177cb9295ac0af57cff20caf2aaa9c8be05"
+        },
+        {
+          "iteration": 2,
+          "loss": 11.24935793876648,
+          "cafbr_enabled": false,
+          "parameter_sync_sha256": "f213a0b8170cf9a96cb1f764e70a2519c1bafb9dae3f9897ec3751512f88e8e2"
+        },
+        {
+          "iteration": 3,
+          "loss": 10.816473245620728,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "99515c59da146fdd071c77dae975d9175e7fecb0d7d9993657f0804dfce5c487"
+        },
+        {
+          "iteration": 4,
+          "loss": 11.048341274261475,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "823f6057acb449f83acf7b18de07b65b5882b890d9c3dd1c5ecb219083d7b9c3"
+        },
+        {
+          "iteration": 5,
+          "loss": 10.571518421173096,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "0f4a0da4d299b208c63c265ebbf96202e80eb1fc5327b734e9428bfa6363c38c"
+        }
+      ],
+      "validation_checks": 5,
+      "best_checkpoint_test": {
+        "iteration": 4,
+        "recorded_at": "2026-10-10T06:04:36.474027+00:00",
+        "aAcc": 34.488630294799805,
+        "mIoU": 11.097196652909922,
+        "mAcc": 24.739612094296533,
+        "mDice": 17.10084973097193,
+        "mFscore": 34.20169946194386,
+        "mPrecision": 13.192186714195248,
+        "mRecall": 24.739612094296533,
+        "per_class": {
+          "clear": {
+            "IoU": 36.0270937282043,
+            "Acc": 80.6322008153169,
+            "Dice": 52.970467486705296,
+            "Fscore": 52.970467486705296,
+            "Precision": 39.44011643341611,
+            "Recall": 80.6322008153169
+          },
+          "thick cloud": {
+            "IoU": 0.0,
+            "Acc": 0.0,
+            "Dice": 0.0,
+            "Fscore": null,
+            "Precision": 0.0,
+            "Recall": 0.0
+          },
+          "thin cloud": {
+            "IoU": 8.361692883435385,
+            "Acc": 18.326247561869227,
+            "Dice": 15.432931437182424,
+            "Fscore": 15.432931437182424,
+            "Precision": 13.328630423364881,
+            "Recall": 18.326247561869227
+          },
+          "cloud shadow": {
+            "IoU": 0.0,
+            "Acc": 0.0,
+            "Dice": 0.0,
+            "Fscore": null,
+            "Precision": 0.0,
+            "Recall": 0.0
+          }
+        },
+        "confusion_matrix": [
+          [
+            671509,
+            4096,
+            155160,
+            2040
+          ],
+          [
+            474323,
+            0,
+            107401,
+            0
+          ],
+          [
+            230721,
+            0,
+            51770,
+            0
+          ],
+          [
+            326051,
+            0,
+            74081,
+            0
+          ]
+        ],
+        "val_loss": 1.3809848874807358,
+        "ce_loss": 1.3809848874807358,
+        "loss": 11.042060494422913,
+        "samples": 8,
+        "data_time": 0.022682515322230756,
+        "time": 0.14459010364953429,
+        "data_split": "test",
+        "cafbr_enabled": true,
+        "cafbr_start_iteration": 3,
+        "role": "final best checkpoint evaluation",
+        "checkpoint": "checkpoints/best.pth",
+        "checkpoint_sha256": "07bca83147d1ee97aa8007f8891e270513995b518b1fe02b696dc319fec75fbc"
+      },
+      "results_path": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base64_down5_ddp_smoke/results.json"
+    },
+    {
+      "dataset": "CloudSEN12_L2A",
+      "base_channels": 64,
+      "parameters": 64056603,
+      "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base64_down5_ddp_smoke",
+      "elapsed_seconds": 57.36,
+      "status": "passed",
+      "environment": {
+        "python": "3.11.7 (main, Dec 15 2023, 18:12:31) [GCC 11.2.0]",
+        "executable": "/root/anaconda3/envs/qwen3/bin/python",
+        "torch": "2.1.2+cu118",
+        "device": "cuda:0",
+        "gpu": "NVIDIA RTX A6000",
+        "cuda": "11.8",
+        "model": "FMamba_CAFBR",
+        "parameters": 64056603,
+        "train_samples": 8,
+        "validation_samples": 8,
+        "validation_split": "test",
+        "checkpoint_selection_split": "test",
+        "test_split": "test",
+        "train_loss_only": true,
+        "physical_batch_size": 1,
+        "grad_accum_steps": 2,
+        "effective_batch_size": 4,
+        "iteration_unit": "optimizer update",
+        "distributed": true,
+        "world_size": 2,
+        "backend": "nccl",
+        "gpu_names": [
+          "NVIDIA RTX A6000",
+          "NVIDIA RTX A6000"
+        ]
+      },
+      "training": [
+        {
+          "iteration": 1,
+          "loss": 11.758497476577759,
+          "cafbr_enabled": false,
+          "parameter_sync_sha256": "ae53130af33f4be4853096144ed3a61e4694e1b4c42aa13d5d0cbc5c8df83a0c"
+        },
+        {
+          "iteration": 2,
+          "loss": 11.250937700271606,
+          "cafbr_enabled": false,
+          "parameter_sync_sha256": "61c628c9a713490875d44414fb4fbdd100b2cbfedf7c23be5e493b17f93d7c04"
+        },
+        {
+          "iteration": 3,
+          "loss": 10.825010538101196,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "11e1fd29b6a7a558fa5ac8f5c62af51cd187488e3e2a44f84a01bd9e2ca8a8e8"
+        },
+        {
+          "iteration": 4,
+          "loss": 11.046561002731323,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "2aaf6d6f8f2f743c72b97f54db55f6a34d68c2b9d1f98fda4d2f1d9aa086cf94"
+        },
+        {
+          "iteration": 5,
+          "loss": 10.57968783378601,
+          "cafbr_enabled": true,
+          "parameter_sync_sha256": "a947fdca75cae6e66460cc8f6e9b8bd3dcaa9f2ec892f5c62f9270954ad0e967"
+        }
+      ],
+      "validation_checks": 5,
+      "best_checkpoint_test": {
+        "iteration": 5,
+        "recorded_at": "2026-10-10T06:05:30.636932+00:00",
+        "aAcc": 34.33637619018555,
+        "mIoU": 11.041129141607604,
+        "mAcc": 24.639199934628063,
+        "mDice": 17.018686012454012,
+        "mFscore": 34.03737202490802,
+        "mPrecision": 13.105418883962416,
+        "mRecall": 24.639199934628063,
+        "per_class": {
+          "clear": {
+            "IoU": 35.94082293608617,
+            "Acc": 80.25816367577043,
+            "Dice": 52.87715957550747,
+            "Fscore": 52.87715957550746,
+            "Precision": 39.42638925591755,
+            "Recall": 80.25816367577043
+          },
+          "thick cloud": {
+            "IoU": 0.0,
+            "Acc": 0.0,
+            "Dice": 0.0,
+            "Fscore": null,
+            "Precision": 0.0,
+            "Recall": 0.0
+          },
+          "thin cloud": {
+            "IoU": 8.22369363034424,
+            "Acc": 18.29863606274182,
+            "Dice": 15.197584474308579,
+            "Fscore": 15.19758447430858,
+            "Precision": 12.995286279932122,
+            "Recall": 18.29863606274182
+          },
+          "cloud shadow": {
+            "IoU": 0.0,
+            "Acc": 0.0,
+            "Dice": 0.0,
+            "Fscore": null,
+            "Precision": 0.0,
+            "Recall": 0.0
+          }
+        },
+        "confusion_matrix": [
+          [
+            668394,
+            4064,
+            160330,
+            17
+          ],
+          [
+            472621,
+            0,
+            109103,
+            0
+          ],
+          [
+            230799,
+            0,
+            51692,
+            0
+          ],
+          [
+            323482,
+            0,
+            76650,
+            0
+          ]
+        ],
+        "val_loss": 1.3820854127407074,
+        "ce_loss": 1.3820854127407074,
+        "loss": 11.04841947555542,
+        "samples": 8,
+        "data_time": 0.02494103816570714,
+        "time": 0.1473102328600362,
+        "data_split": "test",
+        "cafbr_enabled": true,
+        "cafbr_start_iteration": 3,
+        "role": "final best checkpoint evaluation",
+        "checkpoint": "checkpoints/best.pth",
+        "checkpoint_sha256": "4403a469187e080ad16ecb9695a0d8bdb11233e103dde0e9bfbd6dd7a25ff217"
+      },
+      "results_path": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base64_down5_ddp_smoke/results.json"
     }
   ],
-  "unit_tests": "12 related tests passed; exact original parameter order/state_dict/seeded initialization verified against HEAD"
+  "unit_tests": "Scaling tests cover base16/base32/base64 512x512 forward/backward, five upsamplers, CAFBR and scan gradients, and legacy checkpoint compatibility"
 }
