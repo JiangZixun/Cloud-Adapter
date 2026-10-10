@@ -1272,7 +1272,8 @@ class CloudAdaptiveFrequencyBoundaryRefinement(nn.Module):
 
 
 class DynamicChannelGrouping(nn.Module):
-    def __init__(self, in_channels, num_groups, embed_dim=16, group_out_channels=None, return_groups=False):
+    def __init__(self, in_channels, num_groups, embed_dim=16, group_out_channels=None, return_groups=False,
+                 negative_slope=0.0):
         """
         :param in_channels: 输入通道数
         :param num_groups: 分组数量
@@ -1306,7 +1307,9 @@ class DynamicChannelGrouping(nn.Module):
                 nn.BatchNorm2d(in_channels),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(in_channels, self.group_out_channels, kernel_size=1),
-                nn.ReLU(inplace=True)
+                # Single-channel learned groups must retain gradients even
+                # when the entire pointwise response starts negative.
+                nn.LeakyReLU(negative_slope, inplace=True) if negative_slope > 0 else nn.ReLU(inplace=True)
             )
             for _ in range(num_groups)
         ])
@@ -1431,6 +1434,13 @@ class Fmamba(nn.Module):
             raise ValueError("Qwen fusion supports only the original base-64 four-downsample model")
         self.base_channels = base_channels
         self.downsample_stages = downsample_stages
+        channel_groups = int(scgm_num_groups) if scgm_num_groups is not None else (4 if in_channels % 4 == 0 else 1)
+        if channel_groups <= 0:
+            raise ValueError("SCGM num_groups must be positive")
+        # RGB can be embedded into four learned feature channels for four groups.
+        # Divisible inputs keep the original SCGM and checkpoint structure.
+        self.scgm_channels = math.ceil(in_channels / channel_groups) * channel_groups
+        self.scgm_num_groups = channel_groups
         encoder_channels = [base_channels * 2 ** i for i in range(5)]
         expected_in = encoder_channels[:-1]
         expected_up = expected_in[::-1]
@@ -1467,7 +1477,7 @@ class Fmamba(nn.Module):
                                nn.BatchNorm2d(target), nn.ReLU()])
             return nn.Sequential(*layers)
 
-        self.stage_1 = conv_stage([in_channels, base_channels // 2, base_channels, base_channels],
+        self.stage_1 = conv_stage([self.scgm_channels, base_channels // 2, base_channels, base_channels],
                                   first_stride=2 if downsample_stages == 5 else 1)
         for index in range(1, 5):
             setattr(self, f"stage_{index + 1}", conv_stage(
@@ -1624,11 +1634,11 @@ class Fmamba(nn.Module):
                 self.skip_refiners.append(SkipIdentity())
         self.skip_refinement_active = self.skip_refinement_enabled
 
-        channel_groups = int(scgm_num_groups) if scgm_num_groups is not None else (4 if in_channels % 4 == 0 else 1)
-        if channel_groups <= 0 or in_channels % channel_groups != 0:
-            raise ValueError(f"SCGM num_groups must be a positive divisor of in_channels={in_channels}, got {channel_groups}")
-        self.scgm_num_groups = channel_groups
-        self.channelGroup1 = DynamicChannelGrouping(in_channels=in_channels, num_groups=channel_groups)
+        self.scgm_input_proj = (nn.Identity() if self.scgm_channels == in_channels else
+                                nn.Conv2d(in_channels, self.scgm_channels, kernel_size=1))
+        self.channelGroup1 = DynamicChannelGrouping(
+            in_channels=self.scgm_channels, num_groups=channel_groups,
+            negative_slope=0.01 if self.scgm_channels != in_channels else 0.0)
 
     def set_skip_refinement_active(self, active):
         self.skip_refinement_active = bool(active)
@@ -1817,7 +1827,7 @@ class Fmamba(nn.Module):
         self.last_fusion_stats = {}
         self.last_fusion_regularizers = {}
 
-        x = self.channelGroup1(x)
+        x = self.channelGroup1(self.scgm_input_proj(x))
 
         if x.shape[-2] % (2 ** self.downsample_stages) or x.shape[-1] % (2 ** self.downsample_stages):
             raise ValueError(f"Input height and width must be divisible by {2 ** self.downsample_stages}")

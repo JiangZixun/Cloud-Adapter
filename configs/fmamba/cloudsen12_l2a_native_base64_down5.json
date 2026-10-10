@@ -2,7 +2,7 @@
   "dataset": "CloudSEN12_L2A",
   "model": "FMamba_CAFBR",
   "data_root": "/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l2a",
-  "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base64_down5",
+  "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base64_down5_scgm4",
   "classes": [
     "clear",
     "thick cloud",
@@ -45,7 +45,7 @@
     "dice_eps": 1e-05
   },
   "fmamba": {
-    "scgm_num_groups": 3,
+    "scgm_num_groups": 4,
     "skip_refinement": {
       "enabled": true,
       "type": "cloud_adaptive_frequency_boundary",

@@ -34,7 +34,11 @@ class FMambaScalingTests(unittest.TestCase):
                 config = json.loads((ROOT / f'configs/fmamba/cloudsen12_l1c_native_base{base}_down5.json').read_text())
                 model = native_model(config).cuda().train()
                 self.assertEqual(sum(p.numel() for p in model.parameters()),
-                                 {16: 4199547, 32: 16260539, 64: 64056603}[base])
+                                 {16: 4199766, 32: 16260830, 64: 64057038}[base])
+                self.assertEqual(model.scgm_num_groups, 4)
+                self.assertEqual(model.channelGroup1.in_channels, 4)
+                self.assertEqual(len(model.channelGroup1.group_modules), 4)
+                self.assertEqual(model.stage_1[0].in_channels, 4)
                 self.assertEqual(sum(isinstance(m, torch.nn.ConvTranspose2d)
                                      for m in model.modules()), 5)
                 self.assertEqual(model.stage_1[0].stride, (2, 2))
@@ -52,6 +56,13 @@ class FMambaScalingTests(unittest.TestCase):
                 loss = training_loss(model, output, labels, config)
                 self.assertTrue(torch.isfinite(loss))
                 loss.backward()
+                projection_gradient = model.scgm_input_proj.weight.grad
+                self.assertIsNotNone(projection_gradient)
+                self.assertTrue(torch.isfinite(projection_gradient).all())
+                self.assertGreater(projection_gradient.abs().sum().item(), 0)
+                for group in model.channelGroup1.group_modules:
+                    self.assertIsNotNone(group[0].weight.grad)
+                    self.assertGreater(group[0].weight.grad.abs().sum().item(), 0)
                 scans = [p.grad for name, p in model.named_parameters() if name.endswith('A_logs')]
                 self.assertEqual(len(scans), 9)
                 self.assertTrue(all(g is not None and torch.isfinite(g).all() for g in scans))
