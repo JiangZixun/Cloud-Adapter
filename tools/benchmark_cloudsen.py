@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 from baselines.cafbr_schedule import apply_cafbr_schedule, cafbr_start_iteration
 from baselines.checkpoints import CheckpointManager, write_json
 from baselines.data import CloudDataset, IterationBatchSampler, dataset_splits
+from baselines.epoch_schedule import resolve_epoch_schedule
 from baselines.lr_schedule import lr_multiplier, warmup_steps
 from baselines.optimization import accumulated_update, accumulation_steps
 from baselines.model_factory import build_model, training_loss
@@ -37,6 +38,8 @@ def main():
     config = json.loads(args.config.read_text())
     config["grad_accum_steps"] = accumulation_steps(config)
     config["effective_batch_size"] = config["batch_size"] * config["grad_accum_steps"]
+    config['world_size'] = 1
+    resolve_epoch_schedule(config, len(CloudDataset(config, 'train')))
     warmup_steps(config)
     if not config['model'].startswith('FMamba_CAFBR') or config['device'] != 'cuda':
         raise ValueError('This benchmark requires a CUDA CAFBR FMamba configuration')
@@ -49,7 +52,7 @@ def main():
     model = build_model(config).cuda()
     optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda step: lr_multiplier(step, config))
-    scaler = torch.amp.GradScaler('cuda', enabled=config['amp'])
+    scaler = torch.cuda.amp.GradScaler(enabled=config['amp'])
     splits = dataset_splits(config)
     datasets = {key: CloudDataset(config, value) for key, value in splits.items()}
     counts = {key: len(value) for key, value in datasets.items()}

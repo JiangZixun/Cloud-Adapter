@@ -120,8 +120,9 @@ protocol requires a new work directory, preserving its original checkpoint ranki
 ## Smoke tests and historical single-GPU timing
 
 Add `--smoke-test --work-dir <separate-directory>` to any launcher. CloudSEN12
-smoke tests use eight train images and eight test images with the full 512x512
-model; smoke limits are saved into their checkpoints so standalone testing remains
+legacy step-mode smoke tests use eight train images and eight test images with
+the full 512x512 model. The six epoch-mode variants instead use 16 train images,
+three smoke epochs and eight test images, retaining batch4 per GPU; smoke limits are saved into their checkpoints so standalone testing remains
 bounded. These limits are absent from normal training. Previous single-GPU integration tests
 verified both datasets/heads in temporary data roots containing only train/test,
 CAFBR activation, loss-only training, test-based selection, top-3/best/last,
@@ -205,8 +206,8 @@ identity projection and retain their original checkpoint structure.
 The existing CAFBR activation schedule, loss,
 optimizer and LR schedule are retained. Each GPU now uses physical batch size
 4 with `grad_accum_steps=1`; on two GPUs the effective batch size is 8.
-40,000 optimizer updates therefore process 320,000 training samples, including
-repeated visits to the dataset.
+The target is now 20 epochs with an evaluation after every epoch. Runtime
+optimizer-update counts follow the dataset size and actual world size.
 
 Four-class parameter counts: base 16 = 4,199,766 (93.41% fewer than the original
 63,768,409); base 32 = 16,260,830 (74.50% fewer); base 64 = 64,057,038
@@ -214,7 +215,7 @@ Four-class parameter counts: base 16 = 4,199,766 (93.41% fewer than the original
 translate directly into the same runtime or activation-memory reduction.
 
 `start_train.sh` runs base16 L1C/L2A, then base32 L1C/L2A, then base64 L1C/L2A
-sequentially using both GPUs and `--wandb`. Each configuration has its own experiment directory ending in `_scgm4_silu_b4`.
+sequentially using both GPUs and `--wandb`. Each configuration has its own experiment directory ending in `_scgm4_silu_b4_e20`.
 The four-group variants require fresh training; prior three-group checkpoints
 are structurally incompatible with the RGB projection and new grouping.
 The SiLU variant uses a fresh directory to keep earlier LeakyReLU experiments
@@ -248,9 +249,11 @@ runs cover the CAFBR off/on transition, exact parameter synchronization after
 every optimizer step, validation, checkpoint saving and best-checkpoint testing.
 
 
-## A6000 DDP batch4 timing (2026-10-10)
+## Historical A6000 DDP batch4 timing: 40,000 updates (2026-10-10)
 
-All six scaled SCGM4/SiLU configurations now use batch4 per GPU and accumulation1
+The preceding batch4/accumulation1 configuration used 40,000 updates.
+The measurements below are retained as historical throughput evidence.
+All six scaled SCGM4/SiLU variants were measured with batch4 per GPU and accumulation1
 (effective batch8 across two RTX A6000 48GB GPUs). All six passed real-data DDP
 training in both CAFBR phases, finite-loss checks, exact phase-end parameter
 synchronization, validation and checkpoint save/reload. Training remains FP32
@@ -280,10 +283,73 @@ base64 reserved about 43.1 GiB per card during training.
 All six jobs sequentially: approximately 97.5–110.8 hours (4.1–4.6 days).
 
 Results: `docs/fmamba_batch4_timing.json`. Formal training output directories
-end in `_scgm4_silu_b4` to preserve prior batch/accumulation experiments.
+for those historical measurements ended in `_scgm4_silu_b4`. Current
+20-epoch outputs end in `_scgm4_silu_b4_e20`.
 
 ```bash
 /root/anaconda3/envs/qwen3/bin/python -m torch.distributed.run \
   --standalone --nnodes=1 --nproc_per_node=2 tools/benchmark_fmamba_ddp.py \
   --config configs/fmamba/cloudsen12_l1c_native_base64_down5.json
 ```
+
+
+## Current training: 20 epochs, testing after every epoch
+
+All six L1C/L2A base16/base32/base64 launchers and `start_train.sh` now use
+`max_epochs=20`, `val_interval_epochs=1`, batch4 per GPU and accumulation1.
+The stored user configs no longer specify `max_iters` or `val_interval`.
+The trainer derives internal optimizer counters from the actual dataset/world size:
+
+| GPUs | Batch/GPU | Global batch | Updates/epoch | Updates for 20 epochs | Padding/epoch |
+|---|---:|---:|---:|---:|---:|
+| 2 | 4 | 8 | 1062 | 21240 | 6 |
+| 1 | 4 | 4 | 2123 | 42460 | 2 |
+
+Both datasets have 8490 training images. Each epoch has its own shuffled
+permutation, covers every image, and repeats only the minimal number of images
+in the final global batch to keep every rank at batch4. No batch crosses into
+another epoch. Augmentation seeds and epoch sampling support deterministic resume.
+
+Warmup covers the first two epochs (10%); cosine decay spans the remaining
+training. CAFBR is disabled for epochs 1-10 and enabled from epoch 11.
+Epoch-end evaluation uses all 975 images from the configured test split. Its
+metrics are recorded in both validation (checkpoint selection) and test history;
+this is one evaluation pass because both roles use the same split. Final best
+checkpoint testing is retained. Checkpoint ranking, CSV/JSON, console, plots and
+W&B expose epoch numbers; checkpoint filenames also retain internal step counts.
+Existing step-mode configs/checkpoints retain their original behavior.
+
+```bash
+bash start_train.sh
+
+# Override the epoch target, retaining batch4 and --wandb:
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base16_down5.sh --max-epochs 20 --wandb
+
+# Three miniature epochs on real data, including CAFBR off/on:
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base16_down5.sh \
+  --smoke-test --work-dir experiments/CloudSEN12_L1C/FMamba_CAFBR_base16_epoch_smoke
+```
+
+The following updated budgets extrapolate previously measured batch4 throughput
+to 20 epochs. They include the same 20 full epoch-end tests, final best test,
+checkpoint overhead and a 10-25% reserve; they are projections, not fresh
+20-epoch timing measurements.
+
+| Base | Dataset | Suggested hours for 20 epochs |
+|---|---|---:|
+| 16 | CloudSEN12_L1C | 4.4–5.1 |
+| 16 | CloudSEN12_L2A | 4.5–5.1 |
+| 32 | CloudSEN12_L1C | 8.0–9.1 |
+| 32 | CloudSEN12_L2A | 8.0–9.1 |
+| 64 | CloudSEN12_L1C | 14.2–16.1 |
+| 64 | CloudSEN12_L2A | 14.3–16.3 |
+
+All six sequential jobs: 53.5–60.9 hours (2.2–2.5 days).
+
+Projection: `docs/fmamba_epoch_timing_projection.json`. Epoch/DDP smoke and
+resume checks: `docs/fmamba_epoch_ddp_smoke.json`.
+All six variants passed three-epoch real-data DDP smoke tests; 28 related
+regression tests passed. Epoch-end resume restored the optimizer counters,
+schedule and per-rank RNG; final test metrics matched. CUDA training is not
+bitwise deterministic: the largest intermediate mIoU difference was 0.00173
+percentage points. W&B epoch logging was verified in offline mode.

@@ -1,0 +1,264 @@
+{
+  "protocol": "3 smoke epochs on 16 real training images; batch4/GPU, two GPUs, no accumulation; test after each epoch",
+  "runs": [
+    {
+      "base_channels": 16,
+      "dataset": "CloudSEN12_L1C",
+      "status": "passed",
+      "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base16_epoch_smoke",
+      "seconds": null,
+      "steps_per_epoch": 2,
+      "epochs": 3,
+      "optimizer_updates": 6,
+      "epoch_tests": [
+        {
+          "epoch": 1.0,
+          "iteration": 2,
+          "samples": 8,
+          "mIoU": 7.665114574966314
+        },
+        {
+          "epoch": 2.0,
+          "iteration": 4,
+          "samples": 8,
+          "mIoU": 3.585228097110699
+        },
+        {
+          "epoch": 3.0,
+          "iteration": 6,
+          "samples": 8,
+          "mIoU": 4.90225589786579
+        }
+      ],
+      "parameter_sync_sha256": [
+        "2088645201e78a0e17cb43533b181022f6003c300a25845b18c23ea8d8fcfbf8",
+        "da739833dd779c6f13252bfeb09b2205943a655fe329a5a644ddfb3209474e25",
+        "83cf237d180655b9b994302a314f124a613278f22d4056bdfcfdd80352c7874f",
+        "040f796870a91abfb1aae40d923d3596d5e29ec357a51ff250e333096b1774d5",
+        "7b547f05bdb1c76dcecc8242c0b0014c4e60c500090678fa986ad6341f9f9ceb",
+        "d189da4404ba78f525a24c9bf8cf800309f6c2402ede9af072e0f4d03e3f97a8"
+      ],
+      "best_epoch": 1.0,
+      "wandb_mode": null
+    },
+    {
+      "base_channels": 16,
+      "dataset": "CloudSEN12_L2A",
+      "status": "passed",
+      "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base16_epoch_smoke",
+      "seconds": 27.3,
+      "steps_per_epoch": 2,
+      "epochs": 3,
+      "optimizer_updates": 6,
+      "epoch_tests": [
+        {
+          "epoch": 1.0,
+          "iteration": 2,
+          "samples": 8,
+          "mIoU": 7.443006198822781
+        },
+        {
+          "epoch": 2.0,
+          "iteration": 4,
+          "samples": 8,
+          "mIoU": 3.5597696001945693
+        },
+        {
+          "epoch": 3.0,
+          "iteration": 6,
+          "samples": 8,
+          "mIoU": 4.90225589786579
+        }
+      ],
+      "parameter_sync_sha256": [
+        "0d85ba39655534e4a9a3aba3cccda3de27edb572e65dabf1b3d82ba4739b4fa5",
+        "c74c1af1d4276391f4a6efb1e765a7dadcd6c5629acc1d87c7e3b7654eeb0a6e",
+        "a90de08ecc7c2b05dbf2216d29594db4e960311e93e623a80ee251d5b50e34fb",
+        "a2bc8a5a167e5ea68a76fbbd795f12f02ac8d9596dedba924698664cd27529bd",
+        "c19299b2aba791e8fd283916f9d0754f744bf47f17417f274f115d6d2a53a593",
+        "78de53402e402e03e7446f71056b6f94efb606359bc1499d2d08d8e62ee1ade8"
+      ],
+      "best_epoch": 1.0,
+      "wandb_mode": "offline"
+    },
+    {
+      "base_channels": 32,
+      "dataset": "CloudSEN12_L1C",
+      "status": "passed",
+      "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base32_epoch_smoke",
+      "seconds": 32.1,
+      "steps_per_epoch": 2,
+      "epochs": 3,
+      "optimizer_updates": 6,
+      "epoch_tests": [
+        {
+          "epoch": 1.0,
+          "iteration": 2,
+          "samples": 8,
+          "mIoU": 7.711704262172383
+        },
+        {
+          "epoch": 2.0,
+          "iteration": 4,
+          "samples": 8,
+          "mIoU": 9.131920331151493
+        },
+        {
+          "epoch": 3.0,
+          "iteration": 6,
+          "samples": 8,
+          "mIoU": 6.963467328007578
+        }
+      ],
+      "parameter_sync_sha256": [
+        "650dd74567ae76b5f6e278f1ab460ed830fa30d6bb6eba7118a79474afbce2e3",
+        "f17d95329079a8d4b0a690d67b8e3f97f7d9548ae3a3c8d9292ac43baecae26f",
+        "08f6e05c85811b0971d511c15aea0f91e2e569fc75123fb14af521da48b6b822",
+        "4b97ceb8020f2d59fa0d62dde886575ed9e5ab52453fcea28c698694c64514b0",
+        "311c4c83641e6ff56b8e8e1f33b3025301bd89bee0063f8b52d884dd0a2489e4",
+        "487ca444991abee5b67f121414099ac4f7fd0b219d7eef2b2ba5c508588aaa27"
+      ],
+      "best_epoch": 2.0,
+      "wandb_mode": null
+    },
+    {
+      "base_channels": 32,
+      "dataset": "CloudSEN12_L2A",
+      "status": "passed",
+      "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base32_epoch_smoke",
+      "seconds": 32.37,
+      "steps_per_epoch": 2,
+      "epochs": 3,
+      "optimizer_updates": 6,
+      "epoch_tests": [
+        {
+          "epoch": 1.0,
+          "iteration": 2,
+          "samples": 8,
+          "mIoU": 8.027211477766707
+        },
+        {
+          "epoch": 2.0,
+          "iteration": 4,
+          "samples": 8,
+          "mIoU": 8.636616326961903
+        },
+        {
+          "epoch": 3.0,
+          "iteration": 6,
+          "samples": 8,
+          "mIoU": 6.948224782102054
+        }
+      ],
+      "parameter_sync_sha256": [
+        "a8f1c7a6bbb55ccc46b18e83290eb7c3f4d9fe43b64cd5e68f5860c6696548fb",
+        "78a25a05cf2b7fe8456d5635ff349bbd67e1d72ddf57ba409feaa295e48b9257",
+        "43f9426b61981817ff32a8c8c04675e810062e0c5890918c6d3d4026fa445eec",
+        "d425c78c67e0331c1fb76e6f610a32171e9e7d80500693cb97a166fa38983590",
+        "78619fb8f0c3d8beba6c784ed456d2cc8bb778d46ba0ec172587ff464590eba0",
+        "60a1cb515b557d03395577b7b6db04b1d91a4839ff554d54b71774066da4df45"
+      ],
+      "best_epoch": 2.0,
+      "wandb_mode": null
+    },
+    {
+      "base_channels": 64,
+      "dataset": "CloudSEN12_L1C",
+      "status": "passed",
+      "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base64_epoch_smoke",
+      "seconds": 52.04,
+      "steps_per_epoch": 2,
+      "epochs": 3,
+      "optimizer_updates": 6,
+      "epoch_tests": [
+        {
+          "epoch": 1.0,
+          "iteration": 2,
+          "samples": 8,
+          "mIoU": 4.7796682529984835
+        },
+        {
+          "epoch": 2.0,
+          "iteration": 4,
+          "samples": 8,
+          "mIoU": 4.779297942522102
+        },
+        {
+          "epoch": 3.0,
+          "iteration": 6,
+          "samples": 8,
+          "mIoU": 4.774607847629521
+        }
+      ],
+      "parameter_sync_sha256": [
+        "eeecb9170b9afbb69ad3d96f2098ef747fa832a2a906171e55f7004d744dd602",
+        "de9501e13bd80e27ed714533f18ec25201ed161f7a124d81c2ca6879e16ba00d",
+        "1f835fd10021f6516e84c99dbb52d596390e038b3a277cfd59007af8d46bb6c4",
+        "87135987f3a14b441bc3f6ca50c364d6978c0b2fdaf46a4e61875363cfba91f8",
+        "81118e2474f6aca5af65bc2563509b10c7d188a2f15cca2300068f7538f7e30c",
+        "7b966db1e2c9dc3973a0b837c7c46fef7d8e0a15eb5d8aa621929d776af9e2ae"
+      ],
+      "best_epoch": 1.0,
+      "wandb_mode": null
+    },
+    {
+      "base_channels": 64,
+      "dataset": "CloudSEN12_L2A",
+      "status": "passed",
+      "work_dir": "experiments/CloudSEN12_L2A/FMamba_CAFBR_base64_epoch_smoke",
+      "seconds": 47.08,
+      "steps_per_epoch": 2,
+      "epochs": 3,
+      "optimizer_updates": 6,
+      "epoch_tests": [
+        {
+          "epoch": 1.0,
+          "iteration": 2,
+          "samples": 8,
+          "mIoU": 4.7813175376214145
+        },
+        {
+          "epoch": 2.0,
+          "iteration": 4,
+          "samples": 8,
+          "mIoU": 4.779297942522102
+        },
+        {
+          "epoch": 3.0,
+          "iteration": 6,
+          "samples": 8,
+          "mIoU": 4.774607847629521
+        }
+      ],
+      "parameter_sync_sha256": [
+        "034b60f16974e3a6230e38615d60f7f686a4c3ea65b4b07bebe84088e368061a",
+        "4e4bebb7c2f9b5cc4809186ef028bf11e36bb38b3dae3598bccd815d386dada9",
+        "e560ca0415f551cc45df4e485ed412af1d1ff80c85c8fb54dda4b36758605628",
+        "dd2d410f098fcf78a15199a9773aad2c8c82f769620c65161fc6328586f4e741",
+        "deb15f693e1fbb497c31c835cc8bf6dd5e2ef0bbb7348d16228346adbdc60862",
+        "95603e0864e0e6a1e5d90c2e95608c55ba205f6910aae363fb4f2db2587bb095"
+      ],
+      "best_epoch": 1.0,
+      "wandb_mode": null
+    }
+  ],
+  "resume_verification": {
+    "status": "passed",
+    "source": "base16 L1C epoch 1 checkpoint",
+    "target_epoch": 3,
+    "resumed_updates": 4,
+    "epoch_tests": [
+      1,
+      2,
+      3
+    ],
+    "scheduler_optimizer_steps_and_rank_rng_match": true,
+    "loss_match_rtol": 1e-05,
+    "maximum_mIoU_difference_percentage_points": 0.0017251910286320005,
+    "maximum_aAcc_difference_percentage_points": 0.002384185791015625,
+    "exact_model_tensors": false,
+    "max_absolute_model_difference": 0.0003347247838973999,
+    "note": "CUDA training is not configured for bitwise determinism; checks require matching schedule/RNG and numerically matching loss/metrics. Sampler ordering and augmentation seeds match exactly in unit tests.",
+    "log": "/tmp/fmamba_epoch_resume.log"
+  }
+}

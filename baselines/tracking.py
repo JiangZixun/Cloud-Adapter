@@ -45,7 +45,10 @@ class ExperimentHistory:
             splits = dataset_splits(config)
             self.data = dict(schema_version=1, run_id=uuid.uuid4().hex, created_at=timestamp(),
                              config=config, protocol=dict(train="original train split",
-                             validation=f"original {splits['validation']} split", test=f"original {splits['test']} split; final best checkpoint",
+                             validation=f"original {splits['validation']} split",
+                             test=f"original {splits['test']} split; " + (
+                                 "epoch-end tests and final best checkpoint" if 'max_epochs' in config
+                                 else "final best checkpoint"),
                              selection_metric=config["selection_metric"],
                              train_loss_only=config.get("train_loss_only", False),
                              metric_unit="percent", evaluation_augmentation=False),
@@ -83,6 +86,8 @@ class ExperimentHistory:
         from matplotlib import pyplot as plt
         figures = self.directory / "curves"
         figures.mkdir(exist_ok=True)
+        xkey = 'epoch' if 'max_epochs' in self.data['config'] else 'iteration'
+        xlabel = 'Epoch' if xkey == 'epoch' else 'Iteration'
         fig, axis = plt.subplots(figsize=(10, 5))
         for split, label in [("training", "Training batches (optimized loss)"),
                              ("train", "Full train split (eval mode)"),
@@ -90,11 +95,14 @@ class ExperimentHistory:
             rows = self.data[split]
             if not rows:
                 continue
-            axis.plot([row["iteration"] for row in rows], [row["loss"] for row in rows], label=label)
+            axis.plot([row.get(xkey, row['iteration']) for row in rows], [row["loss"] for row in rows], label=label)
         for index, row in enumerate(self.data["test"]):
-            axis.scatter(row["iteration"], row["loss"], marker="*", s=120,
-                         label="Test / best checkpoint" if index == 0 else None)
-        axis.set(xlabel="Training iteration", ylabel="Loss", title="Loss history (configured training objective)")
+            epoch_test = row.get('role') == 'epoch-end test'
+            label = ('Epoch test' if index == 0 else None) if epoch_test else (
+                'Test / best checkpoint' if index == 0 or row.get('role') == 'final best checkpoint evaluation' else None)
+            axis.scatter(row.get(xkey, row['iteration']), row["loss"], marker='o' if epoch_test else '*',
+                         s=35 if epoch_test else 120, label=label)
+        axis.set(xlabel=xlabel, ylabel="Loss", title="Loss history (configured training objective)")
         axis.grid(alpha=.25)
         axis.legend()
         fig.tight_layout()
@@ -106,13 +114,16 @@ class ExperimentHistory:
                 rows = self.data[split]
                 if not rows:
                     continue
-                axis.plot([row["iteration"] for row in rows],
+                axis.plot([row.get(xkey, row['iteration']) for row in rows],
                           [float("nan") if row[key] is None else row[key] for row in rows], marker="o", label=label)
             for index, row in enumerate(self.data["test"]):
                 if row[key] is not None:
-                    axis.scatter(row["iteration"], row[key], marker="*", s=100,
-                                 label="Test / best" if index == 0 else None)
-            axis.set(title=key, xlabel="Iteration", ylabel="Percent", ylim=(0, 100))
+                    epoch_test = row.get('role') == 'epoch-end test'
+                    label = ('Epoch test' if index == 0 else None) if epoch_test else (
+                        'Test / best' if index == 0 or row.get('role') == 'final best checkpoint evaluation' else None)
+                    axis.scatter(row.get(xkey, row['iteration']), row[key], marker='o' if epoch_test else '*',
+                                 s=30 if epoch_test else 100, label=label)
+            axis.set(title=key, xlabel=xlabel, ylabel="Percent", ylim=(0, 100))
             axis.grid(alpha=.25)
         axes.flat[0].legend(fontsize=8)
         axes.flat[-1].axis("off")
@@ -139,6 +150,7 @@ class WandbTracker:
             "dataset", "model", "classes", "image_size", "base_channels", "batch_size",
             "grad_accum_steps", "effective_batch_size", "world_size",
             "max_iters", "val_interval", "lr", "weight_decay", "poly_power", "lr_schedule", "min_lr_ratio",
+            "max_epochs", "val_interval_epochs", "steps_per_epoch", "epoch_padding_samples", "training_unit",
             "warmup_ratio", "warmup_start_factor", "seed", "amp",
             "loss", "fmamba", "lsmamba", "mask2former", "cafbr_start_ratio", "validation_split", "test_split", "train_loss_only"
         ) if key in config}
@@ -152,8 +164,9 @@ class WandbTracker:
             resume="allow" if resume and previous and args.wandb_mode == "online" else None,
         )
         self.run.define_metric("iteration")
+        self.run.define_metric("epoch")
         for split in ("optimization", "train", "validation", "test"):
-            self.run.define_metric(f"{split}/*", step_metric="iteration")
+            self.run.define_metric(f"{split}/*", step_metric='epoch' if 'max_epochs' in config else 'iteration')
         history.data["wandb"] = dict(id=self.run.id, project=args.wandb_project,
                                      mode=args.wandb_mode, url=self.run.url if args.wandb_mode == "online" else None)
         history.save()
@@ -162,7 +175,7 @@ class WandbTracker:
         self.history.data["checkpoint_ranking"] = ranking
         retained = {row["iteration"] for row in ranking}
         filenames = {row["iteration"]: row["file"] for row in ranking}
-        for split in ("train", "validation"):
+        for split in ("train", "validation", "test"):
             for row in self.history.data[split]:
                 row["checkpoint_retained"] = row["iteration"] in retained or row["iteration"] == last_iteration
                 if row["iteration"] in retained:
@@ -177,7 +190,9 @@ class WandbTracker:
         if self.run is None:
             return
         payload = {"iteration": row["iteration"]}
-        for key in ("loss", "ce_loss", "lr", "samples", "batches", "optimizer_updates", "micro_batches_completed", "grad_accum_steps", "effective_batch_size", "world_size", "cafbr_enabled", "cafbr_start_iteration", *METRIC_NAMES):
+        if 'epoch' in row:
+            payload['epoch'] = row['epoch']
+        for key in ("epoch", "epoch_index", "step_in_epoch", "steps_per_epoch", "loss", "ce_loss", "lr", "samples", "batches", "optimizer_updates", "micro_batches_completed", "grad_accum_steps", "effective_batch_size", "world_size", "cafbr_enabled", "cafbr_start_iteration", *METRIC_NAMES):
             value = row.get(key)
             if isinstance(value, (int, float)) and math.isfinite(value):
                 payload[f"{split}/{key}"] = value
@@ -200,6 +215,7 @@ class WandbTracker:
                 self.run.summary[f"best_test/{key}"] = self.history.data["test"][-1][key]
         artifact = wandb.Artifact(f"history-{self.history.data['run_id']}", type="metrics")
         fields = ("iteration", "recorded_at", "loss", "ce_loss", "lr", "samples", "batches",
+                  "epoch", "epoch_index", "step_in_epoch", "steps_per_epoch",
                   "cafbr_enabled", "cafbr_start_iteration", "optimizer_updates",
                   "micro_batches_completed", "grad_accum_steps", "effective_batch_size", "world_size",
                   "first_iteration", "per_class", "confusion_matrix", *METRIC_NAMES)

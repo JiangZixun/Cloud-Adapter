@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT))
 from baselines.cafbr_schedule import apply_cafbr_schedule, cafbr_start_iteration
 from baselines.checkpoints import CheckpointManager, write_json
 from baselines.data import CloudDataset, IterationBatchSampler, dataset_splits
+from baselines.epoch_schedule import resolve_epoch_schedule
 from baselines.distributed import verify_parameter_sync
 from baselines.model_factory import build_model, training_loss
 from baselines.optimization import accumulated_update
@@ -56,6 +57,7 @@ def main():
     scaler = torch.cuda.amp.GradScaler(enabled=config['amp'])
     splits = dataset_splits(config)
     train = CloudDataset(config, 'train')
+    resolve_epoch_schedule(config, len(train))
     updates = 2 * (args.warmup + args.steps) * config['grad_accum_steps']
     loader = DataLoader(train, batch_sampler=IterationBatchSampler(
         len(train), config['batch_size'], 0, updates, config['seed'], rank, world),

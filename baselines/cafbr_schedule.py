@@ -7,6 +7,8 @@ def cafbr_start_iteration(config):
     ratio = config.get("cafbr_start_ratio", 0.0)  # Old checkpoints used CAFBR throughout.
     if not isinstance(ratio, (int, float)) or not math.isfinite(ratio) or not 0 <= ratio <= 1:
         raise ValueError("cafbr_start_ratio must be between 0 and 1")
+    if "max_epochs" in config:
+        return int(config["max_epochs"] * ratio) * config["steps_per_epoch"] + 1
     return int(config["max_iters"] * ratio) + 1
 
 

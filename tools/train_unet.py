@@ -23,7 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from baselines.checkpoints import CheckpointManager, write_json
 from baselines.lr_schedule import lr_multiplier, warmup_steps, validate_resume_schedule
-from baselines.data import CloudDataset, IterationBatchSampler, dataset_splits
+from baselines.data import CloudDataset, IterationBatchSampler, EpochBatchSampler, dataset_splits
+from baselines.epoch_schedule import resolve_epoch_schedule, epoch_context, validate_resume_epochs
 from baselines.metrics import METRIC_NAMES, confusion_matrix, segmentation_metrics
 from baselines.model_factory import build_model, prediction_logits, training_loss
 from baselines.tracking import ExperimentHistory, WandbTracker, add_wandb_arguments, file_digest
@@ -40,6 +41,8 @@ def parse_args(default_config=None):
     parser.add_argument("--data-root", type=Path)
     parser.add_argument("--device", choices=["cpu", "cuda"])
     parser.add_argument("--max-iters", type=int)
+    parser.add_argument("--max-epochs", type=int)
+    parser.add_argument("--val-interval-epochs", type=int)
     parser.add_argument("--val-interval", type=int)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--grad-accum-steps", type=int, help="Physical batches per optimizer update (default: configuration or 1)")
@@ -95,13 +98,13 @@ def _evaluate(model, loader, device, config, description, show_progress):
     return metrics
 
 
-def append_metrics(directory, iteration, lr, train_loss, metrics, validation_split="test"):
+def append_metrics(directory, iteration, lr, train_loss, metrics, validation_split="test", **context):
     record = dict(iteration=iteration, lr=lr, train_loss=train_loss,
-                  validation_split=validation_split, **metrics)
+                  validation_split=validation_split, **metrics, **context)
     with (directory / "metrics.jsonl").open("a") as stream:
         stream.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + "\n")
     csv_path = directory / "metrics.csv"
-    fields = ["iteration", "lr", "train_loss", "validation_split", *METRIC_NAMES,
+    fields = ["iteration", *context, "lr", "train_loss", "validation_split", *METRIC_NAMES,
               "val_loss", "samples", "data_time", "time"]
     fields += [f"{name}/{metric}" for name in metrics["per_class"] for metric in metrics["per_class"][name]]
     row = {key: record[key] for key in fields if key in record}
@@ -120,6 +123,11 @@ def main(default_config=None):
     config = json.loads(args.config.read_text())
     if args.resume and args.evaluate:
         raise ValueError("Choose either --resume or --evaluate")
+    if args.max_epochs is not None:
+        config['max_epochs'] = args.max_epochs
+    epoch_training = 'max_epochs' in config
+    if epoch_training and (args.max_iters is not None or args.val_interval is not None):
+        raise ValueError('Use --max-epochs / --val-interval-epochs for epoch training')
     if args.smoke_test:
         config.update(max_iters=5, val_interval=1, log_interval=1, num_workers=0,
                       train_limit=8, work_dir=f"experiments/{config['dataset']}/{config['model']}_smoke")
@@ -128,7 +136,9 @@ def main(default_config=None):
                 config[f"{split}_limit"] = config[f"smoke_{split}_limit"]
         if config["model"] == "UNet":
             config["base_channels"] = 16
-    for name in ("data_root", "work_dir", "device", "max_iters", "val_interval", "batch_size", "grad_accum_steps", "num_workers", "lr", "warmup_ratio", "warmup_start_factor"):
+        if epoch_training:
+            config.update(max_epochs=3, val_interval_epochs=1, train_limit=16)
+    for name in ("data_root", "work_dir", "device", "max_iters", "max_epochs", "val_interval", "val_interval_epochs", "batch_size", "grad_accum_steps", "num_workers", "lr", "warmup_ratio", "warmup_start_factor"):
         value = getattr(args, name)
         if value is not None:
             config[name] = str(value) if isinstance(value, Path) else value
@@ -140,6 +150,8 @@ def main(default_config=None):
     primary = rank == 0
     config["world_size"] = world_size
     config["effective_batch_size"] = config["batch_size"] * config["grad_accum_steps"] * world_size
+    train_dataset = CloudDataset(config, "train", config.get("train_limit"))
+    resolve_epoch_schedule(config, len(train_dataset))
     warmup_steps(config)  # Validate the schedule before creating outputs.
     if not np.isfinite(config["lr"]) or config["lr"] <= 0:
         raise ValueError("lr must be finite and positive")
@@ -185,6 +197,7 @@ def main(default_config=None):
             if checkpoint["config"].get(name) != config.get(name):
                 raise ValueError(f"Checkpoint configuration mismatch: {name}")
         if args.resume:
+            validate_resume_epochs(checkpoint["config"], config)
             if accumulation_steps(checkpoint["config"]) != config["grad_accum_steps"]:
                 raise ValueError("Checkpoint configuration mismatch: grad_accum_steps; start a new run")
             validate_resume_schedule(checkpoint["config"], config)
@@ -209,6 +222,7 @@ def main(default_config=None):
             history = ExperimentHistory(directory, config)
             tracker = WandbTracker(args, history, resume=True)
             row = history.record("test", checkpoint["iteration"], metrics,
+                                 **epoch_context(checkpoint['iteration'], config),
                                  **restore_cafbr_state(model, checkpoint),
                                  checkpoint=str(args.evaluate.resolve()), checkpoint_sha256=file_digest(args.evaluate),
                                  data_split=splits["test"], role="standalone evaluation")
@@ -235,16 +249,18 @@ def main(default_config=None):
         history = [json.loads(line) for line in history_path.read_text().splitlines()]
         if not history or history[-1]["iteration"] != checkpoint["iteration"]:
             raise ValueError("Checkpoint iteration and metrics history do not match")
-    train_dataset = CloudDataset(config, "train", config.get("train_limit"))
     start_iter = checkpoint["iteration"] if checkpoint else 0
     if start_iter >= config["max_iters"]:
         raise ValueError("max_iters must be greater than the resumed iteration")
-    train_loader = DataLoader(
-        train_dataset,
-        batch_sampler=IterationBatchSampler(len(train_dataset), config["batch_size"], start_iter * config["grad_accum_steps"],
-                                            config["max_iters"] * config["grad_accum_steps"], config["seed"], rank, world_size),
-        num_workers=config["num_workers"], pin_memory=device.type == "cuda",
-    )
+    if epoch_training:
+        sampler = EpochBatchSampler(len(train_dataset), config['batch_size'], start_iter,
+                                    config['max_epochs'], config['seed'], rank, world_size)
+    else:
+        sampler = IterationBatchSampler(len(train_dataset), config["batch_size"], start_iter * config["grad_accum_steps"],
+                                        config["max_iters"] * config["grad_accum_steps"], config["seed"], rank, world_size)
+    loader_options = {'generator': torch.Generator().manual_seed(config['seed'])} if epoch_training else {}
+    train_loader = DataLoader(train_dataset, batch_sampler=sampler,
+                             num_workers=config["num_workers"], pin_memory=device.type == "cuda", **loader_options)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"])
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, lambda step: lr_multiplier(step, config)
@@ -286,6 +302,9 @@ def main(default_config=None):
             "grad_accum_steps": config["grad_accum_steps"],
             "effective_batch_size": config["effective_batch_size"],
             "iteration_unit": "optimizer update",
+            "training_unit": "epoch" if epoch_training else "iteration",
+            **({key: config[key] for key in ('max_epochs', 'steps_per_epoch', 'epoch_padding_samples')}
+               if epoch_training else {}),
             "distributed": distributed, "world_size": world_size, "backend": "nccl" if distributed else None,
             "gpu_names": [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())],
         })
@@ -306,11 +325,17 @@ def main(default_config=None):
     window_loss, window_steps = 0.0, 0
     if primary:
         print(f"{device}: world_size={world_size}, train={len(train_dataset)}, validation({splits['validation']})={len(val_dataset)}, batch={config['batch_size']} x accum={config['grad_accum_steps']} (effective={config['effective_batch_size']}), output={directory}", flush=True)
+        if epoch_training:
+            print(f"Target {config['max_epochs']} epochs, {config['steps_per_epoch']} updates/epoch; "
+                  f"test every {config.get('val_interval_epochs', 1)} epoch(s)", flush=True)
     with ((directory / "train.log").open("a") if primary else nullcontext()) as log:
         train_iterator = iter(train_loader)
-        progress = tqdm(range(start_iter + 1, config["max_iters"] + 1), total=config["max_iters"], initial=start_iter,
-                        desc=f"Train {config['model']}", dynamic_ncols=True, disable=not primary)
-        for iteration in progress:
+        iterations = range(start_iter + 1, config["max_iters"] + 1)
+        progress = tqdm(total=config['max_epochs'], initial=start_iter // config['steps_per_epoch'],
+                        desc=f"Train {config['model']}", unit='epoch', dynamic_ncols=True, disable=not primary) if epoch_training else tqdm(
+                            iterations, total=config['max_iters'], initial=start_iter,
+                            desc=f"Train {config['model']}", dynamic_ncols=True, disable=not primary)
+        for iteration in (iterations if epoch_training else progress):
             model.train()
             cafbr_state = apply_cafbr_schedule(model, config, iteration)
             if distributed and (training_model is None or previous_cafbr_enabled != cafbr_state.get("cafbr_enabled")):
@@ -338,6 +363,11 @@ def main(default_config=None):
             window_loss += loss_value
             window_steps += 1
             postfix = dict(loss=f"{loss_value:.4f}", lr=f"{lr:.3g}")
+            epoch_fields = epoch_context(iteration, config)
+            epoch_end = epoch_training and iteration % config['steps_per_epoch'] == 0
+            if epoch_training:
+                postfix.update(epoch=f"{epoch_fields['epoch_index']}/{config['max_epochs']}",
+                               step=f"{epoch_fields['step_in_epoch']}/{config['steps_per_epoch']}")
             if cafbr_state:
                 postfix["CAFBR"] = "on" if cafbr_state["cafbr_enabled"] else "off"
             progress.set_postfix(postfix, refresh=False)
@@ -352,11 +382,12 @@ def main(default_config=None):
                                      world_size=world_size, parameter_sync_sha256=synchronization_digest,
                                      grad_accum_steps=config["grad_accum_steps"], effective_batch_size=config["effective_batch_size"],
                                      **cafbr_state,
+                                     **epoch_fields,
                                      data_split="train", role="augmented training batches; evolving model weights")
                 tracker.log("optimization", row)
                 tracker.log("train", row)
                 window_loss, window_steps = 0.0, 0
-                message = f"iter={iteration} loss={loss_value:.6f} lr={lr:.8g}"
+                message = (f"epoch={epoch_fields['epoch']:.4f} " if epoch_training else '') + f"iter={iteration} loss={loss_value:.6f} lr={lr:.8g}"
                 log.write(message + "\n")
                 log.flush()
             if validation_due:
@@ -370,28 +401,45 @@ def main(default_config=None):
                                                        "cuda": torch.cuda.get_rng_state(device)})
                 if primary:
                     metrics = evaluate(model, val_loader, device, config)
-                    append_metrics(directory, iteration, lr, loss_sum / loss_steps, metrics, splits["validation"])
+                    append_metrics(directory, iteration, lr, loss_sum / loss_steps, metrics, splits["validation"], **epoch_fields)
                     checkpoint_path = str(directory / "checkpoints" / f"iter_{iteration:07d}.pth")
                     val_row = history.record("validation", iteration, metrics, data_split=splits["validation"],
                                              **cafbr_state,
+                                             **epoch_fields,
                                              role="checkpoint selection", checkpoint=checkpoint_path)
                     tracker.log("validation", val_row)
+                    if epoch_training:
+                        if splits['test'] == splits['validation']:
+                            test_metrics = metrics
+                        else:
+                            epoch_test = CloudDataset(config, splits['test'], config.get('test_limit'))
+                            epoch_test.split = 'evaluation'
+                            epoch_test_loader = DataLoader(epoch_test, batch_size=config['batch_size'],
+                                                           num_workers=config['num_workers'], pin_memory=device.type == 'cuda')
+                            test_metrics = evaluate(model, epoch_test_loader, device, config, description='Epoch test')
+                        epoch_test_row = history.record('test', iteration, test_metrics, **epoch_fields, **cafbr_state,
+                                                        data_split=splits['test'], role='epoch-end test', checkpoint=checkpoint_path)
+                        tracker.log('test', epoch_test_row)
                     history.render()
                     state = dict(iteration=iteration, model=model.state_dict(), optimizer=optimizer.state_dict(),
                                  **cafbr_state,
+                                 **epoch_fields,
                                  scheduler=scheduler.state_dict(), scaler=scaler.state_dict(), config=config,
                                  metrics=metrics, torch_rng=torch.get_rng_state(),
                                  cuda_rng=torch.cuda.get_rng_state_all() if device.type == "cuda" else [],
                                  rank_rng=rank_rng)
                     manager.update(state, metrics)
                     tracker.update_checkpoints(manager.top, iteration)
-                    message = f"validation iter={iteration} loss={metrics['loss']:.6f} " + " ".join(f"{key}={metrics[key]}" for key in METRIC_NAMES)
+                    message = (f"epoch={epoch_fields['epoch']:g} " if epoch_training else '') + f"validation iter={iteration} loss={metrics['loss']:.6f} " + " ".join(f"{key}={metrics[key]}" for key in METRIC_NAMES)
                     tqdm.write(message)
                     log.write(message + "\n")
                     log.flush()
                 if distributed:
                     dist.barrier()
                 loss_sum, loss_steps = 0.0, 0
+            if epoch_end:
+                progress.update(1)
+        progress.close()
     if not primary:
         dist.barrier()
         dist.destroy_process_group()
@@ -406,10 +454,12 @@ def main(default_config=None):
     best_metrics = evaluate(model, test_loader, device, config, description="Test best checkpoint")
     write_json(directory / "best_metrics.json", {
         "iteration": best["iteration"], "checkpoint": "checkpoints/best.pth",
+        **epoch_context(best['iteration'], config),
         "validation_split": splits["validation"], "test_split": splits["test"], **best_metrics,
         **best_cafbr_state,
     })
     test_row = history.record("test", best["iteration"], best_metrics, data_split=splits["test"],
+                              **epoch_context(best['iteration'], config),
                               **best_cafbr_state,
                               role="final best checkpoint evaluation", checkpoint="checkpoints/best.pth",
                               checkpoint_sha256=file_digest(directory / "checkpoints/best.pth"))
@@ -418,7 +468,8 @@ def main(default_config=None):
     history.render()
     tracker.log("test", test_row)
     tracker.finish()
-    print(f"Finished. Best iteration={best['iteration']}, validation mIoU={best['metrics']['mIoU']:.4f}, test mIoU={best_metrics['mIoU']:.4f}", flush=True)
+    best_label = f"epoch={best['epoch']:g}" if epoch_training else f"iteration={best['iteration']}"
+    print(f"Finished. Best {best_label}, validation mIoU={best['metrics']['mIoU']:.4f}, test mIoU={best_metrics['mIoU']:.4f}", flush=True)
 
     if distributed:
         dist.barrier()

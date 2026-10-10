@@ -44,6 +44,8 @@ class CheckpointManager:
             raise ValueError(f"Undefined checkpoint selection metric: {self.metric}")
         candidate = {"file": f"iter_{state['iteration']:07d}.pth",
                      "iteration": state["iteration"], "score": score}
+        if "epoch" in state:
+            candidate["epoch"] = state["epoch"]
         ranked = sorted(self.top + [candidate], key=lambda row: (-row["score"], row["iteration"]))[:self.keep]
         if candidate in ranked:
             save_checkpoint(self.directory / candidate["file"], state)

@@ -1,6 +1,7 @@
 """Read paired RGB cloud PNG datasets with explicit train/validation/test splits."""
 
 import random
+import math
 from pathlib import Path
 
 import numpy as np
@@ -97,3 +98,38 @@ class IterationBatchSampler(Sampler):
                     previous_epoch = epoch
                 batch.append((order[offset], self.seed + position))
             yield batch
+
+
+class EpochBatchSampler(Sampler):
+    """Shuffle each epoch once, padding only its last global batch.
+
+    Fixed physical batches keep DDP ranks aligned. Sample augmentation seeds are
+    independent of worker prefetch and restarting at a saved optimizer update.
+    """
+
+    def __init__(self, size, batch_size, start_iter, max_epochs, seed, rank=0, world_size=1):
+        if min(size, batch_size, max_epochs, world_size) < 1 or not 0 <= rank < world_size:
+            raise ValueError('Invalid epoch sampler size/batch/epochs/rank')
+        self.size, self.batch_size = size, batch_size
+        self.seed, self.rank, self.world_size = seed, rank, world_size
+        self.steps_per_epoch = math.ceil(size / (batch_size * world_size))
+        self.start_iter, self.max_iters = start_iter, max_epochs * self.steps_per_epoch
+        if not 0 <= start_iter <= self.max_iters:
+            raise ValueError('Epoch sampler start is outside the training horizon')
+
+    def __len__(self):
+        return self.max_iters - self.start_iter
+
+    def __iter__(self):
+        previous_epoch, order = None, None
+        global_batch = self.batch_size * self.world_size
+        epoch_samples = self.steps_per_epoch * global_batch
+        for step in range(self.start_iter, self.max_iters):
+            epoch, offset = divmod(step, self.steps_per_epoch)
+            if epoch != previous_epoch:
+                order = torch.randperm(self.size, generator=torch.Generator().manual_seed(self.seed + epoch)).tolist()
+                order += [order[i % self.size] for i in range(epoch_samples - self.size)]
+                previous_epoch = epoch
+            start = offset * global_batch + self.rank * self.batch_size
+            yield [(order[position], self.seed + epoch * epoch_samples + position)
+                   for position in range(start, start + self.batch_size)]

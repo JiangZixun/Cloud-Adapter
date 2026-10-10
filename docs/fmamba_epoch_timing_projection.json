@@ -1,0 +1,105 @@
+{
+  "methodology": "Projection using measured batch4/accumulation1 CAFBR off/on update speeds from docs/fmamba_batch4_timing.json; 20 epochs (21240 updates on two GPUs); same 20 full tests plus final best test and checkpoint overhead. Not a newly timed full training run.",
+  "runs": [
+    {
+      "dataset": "CloudSEN12_L1C",
+      "base_channels": 16,
+      "max_epochs": 20,
+      "steps_per_epoch": 1062,
+      "optimizer_updates": 21240,
+      "epoch_padding_samples": 6,
+      "estimated_total_hours_range": [
+        4.041371916838301,
+        4.042998775397169
+      ],
+      "recommended_hours_range": [
+        4.445509108522131,
+        5.053748469246461
+      ]
+    },
+    {
+      "dataset": "CloudSEN12_L2A",
+      "base_channels": 16,
+      "max_epochs": 20,
+      "steps_per_epoch": 1062,
+      "optimizer_updates": 21240,
+      "epoch_padding_samples": 6,
+      "estimated_total_hours_range": [
+        4.0834763908494365,
+        4.083963353399187
+      ],
+      "recommended_hours_range": [
+        4.491824029934381,
+        5.104954191748984
+      ]
+    },
+    {
+      "dataset": "CloudSEN12_L1C",
+      "base_channels": 32,
+      "max_epochs": 20,
+      "steps_per_epoch": 1062,
+      "optimizer_updates": 21240,
+      "epoch_padding_samples": 6,
+      "estimated_total_hours_range": [
+        7.316087903198554,
+        7.318936562530774
+      ],
+      "recommended_hours_range": [
+        8.047696693518409,
+        9.148670703163468
+      ]
+    },
+    {
+      "dataset": "CloudSEN12_L2A",
+      "base_channels": 32,
+      "max_epochs": 20,
+      "steps_per_epoch": 1062,
+      "optimizer_updates": 21240,
+      "epoch_padding_samples": 6,
+      "estimated_total_hours_range": [
+        7.3004694281142575,
+        7.302739870818305
+      ],
+      "recommended_hours_range": [
+        8.030516370925683,
+        9.128424838522882
+      ]
+    },
+    {
+      "dataset": "CloudSEN12_L1C",
+      "base_channels": 64,
+      "max_epochs": 20,
+      "steps_per_epoch": 1062,
+      "optimizer_updates": 21240,
+      "epoch_padding_samples": 6,
+      "estimated_total_hours_range": [
+        12.902332196472653,
+        12.903198112115604
+      ],
+      "recommended_hours_range": [
+        14.192565416119919,
+        16.128997640144505
+      ]
+    },
+    {
+      "dataset": "CloudSEN12_L2A",
+      "base_channels": 64,
+      "max_epochs": 20,
+      "steps_per_epoch": 1062,
+      "optimizer_updates": 21240,
+      "epoch_padding_samples": 6,
+      "estimated_total_hours_range": [
+        13.026462897840677,
+        13.028563428252363
+      ],
+      "recommended_hours_range": [
+        14.329109187624745,
+        16.285704285315454
+      ]
+    }
+  ],
+  "all_six_sequential_hours_range": [
+    53.537220806645266,
+    60.85050012814175
+  ]
+}
