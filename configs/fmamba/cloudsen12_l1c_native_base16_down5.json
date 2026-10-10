@@ -2,7 +2,7 @@
   "dataset": "CloudSEN12_L1C",
   "model": "FMamba_CAFBR",
   "data_root": "/opt/data/private/Dataset/Cloud-Adapter/cloudsen12_high_l1c",
-  "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base16_down5_scgm4_silu_b4_e20",
+  "work_dir": "experiments/CloudSEN12_L1C/FMamba_CAFBR_base16_down5_scgm4_silu_b4_e30",
   "classes": [
     "clear",
     "thick cloud",
@@ -78,6 +78,6 @@
   "grad_accum_steps": 1,
   "effective_batch_size": 8,
   "world_size": 2,
-  "max_epochs": 20,
+  "max_epochs": 30,
   "val_interval_epochs": 1
 }

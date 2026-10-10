@@ -293,7 +293,16 @@ for those historical measurements ended in `_scgm4_silu_b4`. Current
 ```
 
 
-## Current training: 20 epochs, testing after every epoch
+## Current entrypoint: L1C base16/base32, 30 epochs
+
+`start_train.sh` runs only L1C base16 and base32 sequentially with `--wandb`.
+These two configs use `max_epochs=30`, batch4 per GPU, accumulation1, and
+testing after every epoch. Their output directories end in `_b4_e30`.
+On two GPUs each epoch has 1062 updates, for 31860 updates in total.
+The existing 10% warmup now spans epochs 1-3; CAFBR is enabled from epoch 16
+with the existing 50% activation schedule. Other variant configs retain 20 epochs.
+
+## Previous 20-epoch configuration and timing estimates
 
 All six L1C/L2A base16/base32/base64 launchers and `start_train.sh` now use
 `max_epochs=20`, `val_interval_epochs=1`, batch4 per GPU and accumulation1.
