@@ -1419,10 +1419,26 @@ class Fmamba(nn.Module):
         class_conditional_fusion=None,
         scgm_num_groups=None,
         skip_refinement=None,
+        base_channels=64,
+        downsample_stages=4,
     ):
         super(Fmamba, self).__init__()
-        in_chan = in_chan or [64, 128, 256, 512]
-        up_chan = up_chan or [512, 256, 128, 64]
+        if base_channels not in (16, 32, 64):
+            raise ValueError("FMamba base_channels must be 16, 32, or 64")
+        if downsample_stages not in (4, 5):
+            raise ValueError("FMamba downsample_stages must be 4 or 5")
+        if qwen_bottleneck_dim is not None and (base_channels != 64 or downsample_stages != 4):
+            raise ValueError("Qwen fusion supports only the original base-64 four-downsample model")
+        self.base_channels = base_channels
+        self.downsample_stages = downsample_stages
+        encoder_channels = [base_channels * 2 ** i for i in range(5)]
+        expected_in = encoder_channels[:-1]
+        expected_up = expected_in[::-1]
+        if in_chan is not None and list(in_chan) != expected_in:
+            raise ValueError("in_chan must match the configured encoder channels")
+        if up_chan is not None and list(up_chan) != expected_up:
+            raise ValueError("up_chan must match the configured decoder channels")
+        in_chan, up_chan = expected_in, expected_up
         self.fusion_mode = fusion_mode
         if self.fusion_mode not in {"concat", "add", "gated_residual"}:
             raise ValueError(f"Unsupported fusion_mode: {self.fusion_mode}")
@@ -1441,109 +1457,35 @@ class Fmamba(nn.Module):
         )
         self.skip_refinement_cfg = skip_refinement or {}
         self.skip_refinement_enabled = bool(self.skip_refinement_cfg.get("enabled", False))
-        self.stage_1 = nn.Sequential(
-            nn.Conv2d(in_channels=in_channels, out_channels=32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-        )
+        # Keep the original module names and Sequential indices so existing
+        # base-64 / four-downsample checkpoints remain strictly loadable.
+        def conv_stage(channels, pool=False, first_stride=1):
+            layers = [nn.MaxPool2d(kernel_size=2)] if pool else []
+            for index, (source, target) in enumerate(zip(channels[:-1], channels[1:])):
+                layers.extend([nn.Conv2d(source, target, kernel_size=3, padding=1,
+                                         stride=first_stride if index == 0 else 1),
+                               nn.BatchNorm2d(target), nn.ReLU()])
+            return nn.Sequential(*layers)
 
-        self.stage_2 = nn.Sequential(
-            nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-        )
-
-        self.stage_3 = nn.Sequential(
-            nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-        )
-
-        self.stage_4 = nn.Sequential(
-            nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-        )
-
-        self.stage_5 = nn.Sequential(
-            nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=3, padding=1),
-            nn.BatchNorm2d(1024),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=1024, out_channels=1024, kernel_size=3, padding=1),
-            nn.BatchNorm2d(1024),
-            nn.ReLU(),
-        )
-
-        self.upsample_4 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels=1024, out_channels=512, kernel_size=4, stride=2, padding=1)
-        )
-        self.upsample_3 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=4, stride=2, padding=1)
-        )
-        self.upsample_2 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels=256, out_channels=128, kernel_size=4, stride=2, padding=1)
-        )
-        self.upsample_1 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels=128, out_channels=64, kernel_size=4, stride=2, padding=1)
-        )
-
-        self.stage_up_4 = nn.Sequential(
-            nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU()
-        )
-
-        self.stage_up_3 = nn.Sequential(
-            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU()
-        )
-
-        self.stage_up_2 = nn.Sequential(
-            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU()
-        )
-        self.stage_up_1 = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU()
-        )
-
-        self.final = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=3, padding=1),
-        )
+        self.stage_1 = conv_stage([in_channels, base_channels // 2, base_channels, base_channels],
+                                  first_stride=2 if downsample_stages == 5 else 1)
+        for index in range(1, 5):
+            setattr(self, f"stage_{index + 1}", conv_stage(
+                [encoder_channels[index - 1], encoder_channels[index], encoder_channels[index]], pool=True))
+        for stage in range(4, 0, -1):
+            channels = encoder_channels[stage - 1]
+            setattr(self, f"upsample_{stage}", nn.Sequential(nn.ConvTranspose2d(
+                encoder_channels[stage], channels, kernel_size=4, stride=2, padding=1)))
+        # Preserve parameter order as well as names for legacy AdamW resumes.
+        for stage in range(4, 0, -1):
+            channels = encoder_channels[stage - 1]
+            setattr(self, f"stage_up_{stage}", conv_stage([channels * 2, channels, channels]))
+        if downsample_stages == 5:
+            # The final full-resolution block has no encoder skip, as in SMP U-Net.
+            self.upsample_0 = nn.Sequential(nn.ConvTranspose2d(
+                base_channels, base_channels, kernel_size=4, stride=2, padding=1))
+            self.stage_up_0 = conv_stage([base_channels, base_channels, base_channels])
+        self.final = nn.Sequential(nn.Conv2d(base_channels, num_classes, kernel_size=3, padding=1))
 
         self.qwen_proj = None
         self.bottleneck_fuse = None
@@ -1628,8 +1570,8 @@ class Fmamba(nn.Module):
             self.blocks.append(block)
 
         self.up_blocks = nn.ModuleList()
-        for i in range(4):
-            block1 = FourierVSSBlock(in_channels=up_chan[i])
+        for channels in up_chan + ([base_channels] if downsample_stages == 5 else []):
+            block1 = FourierVSSBlock(in_channels=channels)
             self.up_blocks.append(block1)
 
         self.skip_refiners = nn.ModuleList()
@@ -1640,9 +1582,9 @@ class Fmamba(nn.Module):
             detail_kernel = int(self.skip_refinement_cfg.get("detail_kernel", 3))
             detail_scale_init = float(self.skip_refinement_cfg.get("detail_scale_init", 0.0))
             gate_bias = float(self.skip_refinement_cfg.get("gate_bias", 0.0))
-            stage_names = ["stage_4", "stage_3", "stage_2", "stage_1"]
+            stage_names = [f"stage_{stage}" for stage in range(4, 0, -1)]
             fourier_stages = set(self.skip_refinement_cfg.get("fourier_stages", ["stage_4", "stage_3", "stage_2"]))
-            for stage_name, channels in zip(stage_names, [512, 256, 128, 64]):
+            for stage_name, channels in zip(stage_names, up_chan):
                 if refinement_type in {"cloud_adaptive_frequency_boundary", "cafbr", "frequency_boundary"}:
                     self.skip_refiners.append(
                         CloudAdaptiveFrequencyBoundaryRefinement(
@@ -1877,64 +1819,36 @@ class Fmamba(nn.Module):
 
         x = self.channelGroup1(x)
 
-        # 下采样过程
-        stage_1 = self.stage_1(x)
-        stage_1 = self.blocks[0](stage_1)
-
-        stage_2 = self.stage_2(stage_1)
-        stage_2 = self.blocks[1](stage_2) 
-
-        stage_3 = self.stage_3(stage_2)
-        stage_3 = self.blocks[2](stage_3)
-
-        stage_4 = self.stage_4(stage_3)
-        stage_4 = self.blocks[3](stage_4)
-
-        stage_5 = self.stage_5(stage_4)
-        stage_5 = self._fuse_bottleneck(stage_5, qwen_bottleneck)
-        stage_4_skip = self._fuse_stage4(stage_4, qwen_bottleneck)
-
-        # 上采样和合并stage_4
-        up_4 = self.upsample_4(stage_5)
-        stage_4_skip = self._refine_skip(0, stage_4_skip, up_4)
-        
-        up_4_conv = torch.cat([up_4, stage_4_skip], dim=1)
-        up_4_conv = self.stage_up_4(up_4_conv)
-        up_4_conv = self.up_blocks[0](up_4_conv)
-
-        # 上采样和合并stage_3
-        up_3 = self.upsample_3(up_4_conv)
-        stage_3 = self._refine_skip(1, stage_3, up_3)
-
-        up_3_conv = torch.cat([up_3, stage_3], dim=1)
-
-        up_3_conv = self.stage_up_3(up_3_conv)
-        up_3_conv = self.up_blocks[1](up_3_conv)
-
-        # 上采样和合并stage_2
-        up_2 = self.upsample_2(up_3_conv)
-        stage_2 = self._refine_skip(2, stage_2, up_2)
-
-        up_2_conv = torch.cat([up_2, stage_2], dim=1)
-        up_2_conv = self.stage_up_2(up_2_conv)
-        up_2_conv = self.up_blocks[2](up_2_conv)
-
-        # 上采样和合并stage_1
-        up_1 = self.upsample_1(up_2_conv)
-        stage_1 = self._refine_skip(3, stage_1, up_1)
-
-        up_1_conv = torch.cat([up_1, stage_1], dim=1)
-        up_1_conv = self.stage_up_1(up_1_conv)
-        up_1_conv = self.up_blocks[3](up_1_conv)
-
+        if x.shape[-2] % (2 ** self.downsample_stages) or x.shape[-1] % (2 ** self.downsample_stages):
+            raise ValueError(f"Input height and width must be divisible by {2 ** self.downsample_stages}")
+        if return_pyramid and self.downsample_stages != 4:
+            raise ValueError("Mask2Former pyramid currently supports only four-downsample FMamba")
+        skips = []
+        for index in range(4):
+            x = getattr(self, f"stage_{index + 1}")(x)
+            x = self.blocks[index](x)
+            skips.append(x)
+        x = self.stage_5(x)
+        x = self._fuse_bottleneck(x, qwen_bottleneck)
+        # The original optional Qwen stage-4 fusion remains unchanged.
+        if self.downsample_stages == 4:
+            skips[-1] = self._fuse_stage4(skips[-1], qwen_bottleneck)
+        decoded = []
+        for index, stage in enumerate(range(4, 0, -1)):
+            x = getattr(self, f"upsample_{stage}")(x)
+            skip = self._refine_skip(index, skips[stage - 1], x)
+            x = getattr(self, f"stage_up_{stage}")(torch.cat([x, skip], dim=1))
+            x = self.up_blocks[index](x)
+            decoded.append(x)
+        if self.downsample_stages == 5:
+            x = self.upsample_0(x)
+            x = self.stage_up_0(x)
+            x = self.up_blocks[4](x)
         if return_pyramid:
-            # Preserve every decoder/CAFBR branch. Pool the four decoded maps
-            # to the standard 4/8/16/32 strides consumed by Mask2Former.
-            return [F.avg_pool2d(feature, 4) for feature in
-                    (up_1_conv, up_2_conv, up_3_conv, up_4_conv)]
-        output = self.final(up_1_conv)
+            return [F.avg_pool2d(feature, 4) for feature in reversed(decoded)]
+        output = self.final(x)
         if return_features:
-            return output, up_1_conv
+            return output, x
         return output
 
 

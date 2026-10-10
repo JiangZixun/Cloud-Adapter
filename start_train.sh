@@ -15,5 +15,11 @@ cd "$PROJECT_ROOT"
 # bash scripts/train/HRC_WHU/train_fmamba_cafbr_lr3e-5.sh --wandb
 
 # Native CAFBR FMamba: each job uses both A6000 GPUs; run sequentially.
-bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr.sh --wandb
-bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr.sh --wandb
+# bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr.sh --wandb
+# bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr.sh --wandb
+
+# Five down/up-sampling stages; each job uses both GPUs, with W&B enabled.
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base16_down5.sh --wandb
+bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base16_down5.sh --wandb
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base32_down5.sh --wandb
+bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base32_down5.sh --wandb

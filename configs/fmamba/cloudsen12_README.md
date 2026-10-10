@@ -165,3 +165,61 @@ be exactly four times longer. Re-run the benchmark above for fresh measurements.
 
 These estimates include 40,000 optimizer updates (160,000 micro-batches),
 all twenty periodic test-set evaluations, final best testing and checkpoint writes.
+
+
+## Five-downsample native FMamba variants
+
+The `native_base16_down5` and `native_base32_down5` configurations support both
+CloudSEN12 L1C and L2A. `base_channels` now controls the actual model width;
+`fmamba.downsample_stages=5` selects a stride-2 first convolution followed by
+four 2x2 max pools. The spatial pyramid matches UNetMobv2: 256, 128, 64, 32,
+16 for a 512x512 input. Upsampling remains FMamba's learned transpose convolution,
+not UNetMobv2's nearest-neighbor interpolation.
+
+| Stage | Resolution | Base 16 channels | Base 32 channels |
+|---|---:|---:|---:|
+| Encoder 1 | 256x256 | 16 | 32 |
+| Encoder 2 | 128x128 | 32 | 64 |
+| Encoder 3 | 64x64 | 64 | 128 |
+| Encoder 4 | 32x32 | 128 | 256 |
+| Bottleneck | 16x16 | 256 | 512 |
+| Decoder 4 | 32x32 | 128 | 256 |
+| Decoder 3 | 64x64 | 64 | 128 |
+| Decoder 2 | 128x128 | 32 | 64 |
+| Decoder 1 | 256x256 | 16 | 32 |
+| Final decoder (no skip) | 512x512 | 16 | 32 |
+| Segmentation logits | 512x512 | 4 | 4 |
+
+Both variants have five downsampling and five upsampling operations, four CAFBR
+skip refiners, four encoder and five decoder FourierVSS blocks. The bottleneck
+uses convolution only. CAFBR Fourier branches run at encoder stages 2/3/4;
+Mamba state size remains 16. The existing CAFBR activation schedule, loss,
+optimizer, LR schedule and effective batch size of four are retained.
+
+Four-class parameter counts: base 16 = 4,199,547 (93.41% fewer than the original
+63,768,409); base 32 = 16,260,539 (74.50% fewer). Parameter reduction does not
+translate directly into the same runtime or activation-memory reduction.
+
+`start_train.sh` runs base16 L1C/L2A, then base32 L1C/L2A sequentially using both
+GPUs and `--wandb`. Each configuration has its own experiment directory.
+
+```bash
+bash start_train.sh
+
+# Run an individual experiment:
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base16_down5.sh --wandb
+bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base16_down5.sh --wandb
+bash scripts/train/CloudSEN12_L1C/train_fmamba_cafbr_base32_down5.sh --wandb
+bash scripts/train/CloudSEN12_L2A/train_fmamba_cafbr_base32_down5.sh --wandb
+```
+
+The original base64/four-downsample configs remain available. Their checkpoint
+keys, parameter order and seeded initialization are preserved, including legacy
+AdamW resumes. New widths/depths require fresh training; use their own config
+and checkpoint for evaluation/resume. Five-downsample variants use the native
+head; the current Mask2Former pyramid requires four downsampling operations.
+
+Architecture/gradient checks are in `tests/test_fmamba_scaling.py`; real-data
+512x512 two-GPU smoke results are in `docs/fmamba_scaled_ddp_smoke.json`. Smoke
+runs cover the CAFBR off/on transition, exact parameter synchronization after
+every optimizer step, validation, checkpoint saving and best-checkpoint testing.
