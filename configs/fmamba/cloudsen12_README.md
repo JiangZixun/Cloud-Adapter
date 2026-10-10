@@ -319,12 +319,15 @@ Real-data checks covered 16 train and 16 test RGB images with normalized values
 in [0,1]. A two-GPU smoke passed five synchronized updates, both CAFBR phases,
 validation/final-best testing and offline W&B logging.
 Online W&B smoke also completed on `interactive49037v1`; this does not establish
-successful startup on another host. The launcher now saves per-rank stdout,
-stderr and Python exception records under
+successful startup on another host. The launcher keeps rank 0 stdout/stderr
+directly connected to the terminal for in-place tqdm refreshes, saves rank 1
+stdout/stderr and both ranks' Python exception records under
 `experiments/ddp_logs/FMamba_CAFBR_minmax_40k` (override with `DDP_LOG_DIR`).
 The FMamba entrypoint records child exceptions so torchrun can print the root
 traceback instead of only `ChildFailedError`; an intentional invalid-step run
 verified this reporting path.
+It uses `--redirects 1:3` rather than `--tee 3`: torchrun's line-based tee relay
+turns tqdm carriage-return updates into separate output lines.
 
 ## Current entrypoint: L1C base16/base32, 30 epochs
 
